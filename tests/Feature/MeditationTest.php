@@ -130,7 +130,8 @@ test('an unknown sort column is rejected', function () {
 });
 
 test('a meditation can be created', function () {
-    $this->post(route('meditations.store'), meditationPayload(['title' => '  Body Scan  ']))
+    $this->from(route('meditations.index'))
+        ->post(route('meditations.store'), meditationPayload(['title' => '  Body Scan  ']))
         ->assertRedirect(route('meditations.index'));
 
     $meditation = Meditation::sole();
@@ -181,10 +182,11 @@ test('the same title may be reused in another category', function () {
 test('a meditation can be updated', function () {
     $meditation = Meditation::factory()->inCategory($this->category)->create();
 
-    $this->put(route('meditations.update', $meditation), meditationPayload([
-        'title' => 'Renamed Session',
-        'duration_minutes' => 30,
-    ]))->assertRedirect(route('meditations.index'));
+    $this->from(route('meditations.index'))
+        ->put(route('meditations.update', $meditation), meditationPayload([
+            'title' => 'Renamed Session',
+            'duration_minutes' => 30,
+        ]))->assertRedirect(route('meditations.index'));
 
     expect($meditation->fresh())
         ->title->toBe('Renamed Session')
@@ -198,16 +200,25 @@ test('a meditation keeps its own title when updated', function () {
         ->assertValid();
 });
 
-test('the edit screen carries the meditation and categories', function () {
+test('the index carries everything the edit dialog needs', function () {
     $meditation = Meditation::factory()->inCategory($this->category)->create();
 
-    $this->get(route('meditations.edit', $meditation))
+    $this->get(route('meditations.index'))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('meditations/edit')
-            ->where('meditation.id', $meditation->id)
             ->where('maxDuration', 600)
             ->has('categories', 1)
+            ->has('meditations.data.0', fn (AssertableInertia $row) => $row
+                ->where('id', $meditation->id)
+                ->where('category_id', $meditation->category_id)
+                ->where('title', $meditation->title)
+                ->where('description', $meditation->description)
+                ->where('thumbnail', $meditation->thumbnail)
+                ->where('audio_url', $meditation->audio_url)
+                ->where('video_url', $meditation->video_url)
+                ->where('duration_minutes', $meditation->duration_minutes)
+                ->etc()
+            )
         );
 });
 

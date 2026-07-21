@@ -38,18 +38,8 @@ class MeditationController extends Controller
             'categories' => Inertia::once(fn (): Collection => $this->categoryOptions()),
             'totalCount' => Inertia::once(fn (): int => Meditation::query()->count()),
             'totalMinutes' => Inertia::once(fn (): int => (int) Meditation::query()->sum('duration_minutes')),
-            'perPageOptions' => IndexMeditationRequest::PER_PAGE_OPTIONS,
-        ]);
-    }
-
-    /**
-     * Show the form for creating a new meditation.
-     */
-    public function create(): Response
-    {
-        return Inertia::render('meditations/create', [
-            'categories' => $this->categoryOptions(),
             'maxDuration' => Meditation::MAX_DURATION_MINUTES,
+            'perPageOptions' => IndexMeditationRequest::PER_PAGE_OPTIONS,
         ]);
     }
 
@@ -65,22 +55,7 @@ class MeditationController extends Controller
             'message' => __(':title has been created.', ['title' => $meditation->title]),
         ]);
 
-        return to_route('meditations.index');
-    }
-
-    /**
-     * Show the form for editing the given meditation.
-     */
-    public function edit(Meditation $meditation): Response
-    {
-        return Inertia::render('meditations/edit', [
-            'meditation' => $meditation->only([
-                'id', 'category_id', 'title', 'description',
-                'thumbnail', 'audio_url', 'video_url', 'duration_minutes',
-            ]),
-            'categories' => $this->categoryOptions(),
-            'maxDuration' => Meditation::MAX_DURATION_MINUTES,
-        ]);
+        return back();
     }
 
     /**
@@ -95,7 +70,7 @@ class MeditationController extends Controller
             'message' => __(':title has been updated.', ['title' => $meditation->title]),
         ]);
 
-        return to_route('meditations.index');
+        return back();
     }
 
     /**

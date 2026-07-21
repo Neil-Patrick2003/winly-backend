@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import {
     AudioLines,
     Clock,
@@ -9,12 +9,11 @@ import {
     Video,
     Waves,
 } from 'lucide-react';
-import {
-    create,
-    edit,
-    index,
-} from '@/actions/App/Http/Controllers/MeditationController';
+import { useState } from 'react';
+import { index } from '@/actions/App/Http/Controllers/MeditationController';
 import DeleteMeditationDialog from '@/components/meditations/delete-meditation-dialog';
+import MeditationDialog from '@/components/meditations/meditation-dialog';
+import type { MeditationDraft } from '@/components/meditations/meditation-dialog';
 import MeditationFilterBar from '@/components/meditations/meditation-filter-bar';
 import MetricStrip from '@/components/metric-strip';
 import PageHeader from '@/components/page-header';
@@ -61,6 +60,7 @@ export default function MeditationIndex({
     categories,
     totalCount,
     totalMinutes,
+    maxDuration,
     perPageOptions,
 }: {
     meditations: Paginated<Meditation>;
@@ -68,9 +68,23 @@ export default function MeditationIndex({
     categories: MeditationCategoryOption[];
     totalCount: number;
     totalMinutes: number;
+    maxDuration: number;
     perPageOptions: number[];
 }) {
     const { sortBy, reset, isFiltered } = useMeditationFilters(filters);
+
+    const [editing, setEditing] = useState<MeditationDraft | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+
+    function openCreate() {
+        setEditing(null);
+        setDialogOpen(true);
+    }
+
+    function openEdit(meditation: MeditationDraft) {
+        setEditing(meditation);
+        setDialogOpen(true);
+    }
 
     return (
         <>
@@ -82,11 +96,9 @@ export default function MeditationIndex({
                     title="Meditations"
                     description="Every guided session in the app, and the category it is filed under."
                     actions={
-                        <Button asChild>
-                            <Link href={create()} prefetch>
-                                <Plus />
-                                New meditation
-                            </Link>
+                        <Button onClick={openCreate}>
+                            <Plus />
+                            New meditation
                         </Button>
                     }
                 />
@@ -236,17 +248,13 @@ export default function MeditationIndex({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        asChild
+                                                        onClick={() =>
+                                                            openEdit(meditation)
+                                                        }
                                                         aria-label={`Edit ${meditation.title}`}
+                                                        data-test={`edit-meditation-${meditation.id}`}
                                                     >
-                                                        <Link
-                                                            href={edit(
-                                                                meditation.id,
-                                                            )}
-                                                            prefetch
-                                                        >
-                                                            <Pencil className="size-4" />
-                                                        </Link>
+                                                        <Pencil className="size-4" />
                                                     </Button>
 
                                                     <DeleteMeditationDialog
@@ -293,11 +301,12 @@ export default function MeditationIndex({
                                                         Clear filters
                                                     </Button>
                                                 ) : (
-                                                    <Button size="sm" asChild>
-                                                        <Link href={create()}>
-                                                            <Plus />
-                                                            New meditation
-                                                        </Link>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={openCreate}
+                                                    >
+                                                        <Plus />
+                                                        New meditation
                                                     </Button>
                                                 )}
                                             </div>
@@ -314,6 +323,14 @@ export default function MeditationIndex({
                     />
                 </section>
             </div>
+
+            <MeditationDialog
+                meditation={editing}
+                categories={categories}
+                maxDuration={maxDuration}
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+            />
         </>
     );
 }
