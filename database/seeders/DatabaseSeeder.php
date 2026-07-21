@@ -19,7 +19,13 @@ class DatabaseSeeder extends Seeder
 
         User::factory()->create([
             'name' => 'Test User',
+            'username' => 'test_user',
             'email' => 'test@example.com',
+        ]);
+
+        $this->call([
+            MeditationCategorySeeder::class,
+            MeditationSeeder::class,
         ]);
     }
 }

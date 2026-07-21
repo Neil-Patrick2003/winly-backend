@@ -1,5 +1,14 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import {
+    AudioLines,
+    BookOpen,
+    FolderGit2,
+    LayoutGrid,
+    Settings2,
+    Sparkles,
+} from 'lucide-react';
+import { index as meditationCategories } from '@/actions/App/Http/Controllers/MeditationCategoryController';
+import { index as meditations } from '@/actions/App/Http/Controllers/MeditationController';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,13 +23,44 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import type { NavItem } from '@/types';
+import { edit as editProfile } from '@/routes/profile';
+import type { NavGroup, NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const navGroups: NavGroup[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        label: 'Overview',
+        items: [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+            },
+        ],
+    },
+    {
+        label: 'Content library',
+        items: [
+            {
+                title: 'Meditations',
+                href: meditations(),
+                icon: AudioLines,
+            },
+            {
+                title: 'Categories',
+                href: meditationCategories(),
+                icon: Sparkles,
+            },
+        ],
+    },
+    {
+        label: 'Workspace',
+        items: [
+            {
+                title: 'Settings',
+                href: editProfile(),
+                icon: Settings2,
+            },
+        ],
     },
 ];
 
@@ -40,7 +80,7 @@ const footerNavItems: NavItem[] = [
 export function AppSidebar() {
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+            <SidebarHeader className="border-b border-sidebar-border/60 pb-2">
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
@@ -52,12 +92,12 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
-                <NavMain items={mainNavItems} />
+            <SidebarContent className="gap-4 pt-2">
+                <NavMain groups={navGroups} />
             </SidebarContent>
 
-            <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
+            <SidebarFooter className="gap-1 border-t border-sidebar-border/60">
+                <NavFooter items={footerNavItems} />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>
