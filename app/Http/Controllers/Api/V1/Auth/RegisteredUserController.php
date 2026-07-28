@@ -17,12 +17,10 @@ class RegisteredUserController extends Controller
      */
     public function store(RegisterRequest $request): JsonResponse
     {
-        $user = DB::transaction(fn (): User => User::create($request->safe()->only([
-            'name',
-            'username',
-            'email',
-            'password',
-        ])));
+        $user = DB::transaction(fn (): User => User::create([
+            ...$request->safe()->only(['full_name', 'username', 'email']),
+            'password_hash' => $request->string('password')->value(),
+        ]));
 
         event(new Registered($user));
 

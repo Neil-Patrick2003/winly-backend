@@ -21,7 +21,7 @@ import type { MeditationCategory } from '@/types';
 
 export type CategoryDraft = Pick<
     MeditationCategory,
-    'id' | 'name' | 'icon' | 'description'
+    'id' | 'label' | 'icon' | 'description'
 >;
 
 /**
@@ -47,7 +47,7 @@ export default function CategoryDialog({
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
-                        {isEditing ? `Edit ${category.name}` : 'New category'}
+                        {isEditing ? `Edit ${category.label}` : 'New category'}
                     </DialogTitle>
 
                     <DialogDescription>
@@ -69,21 +69,21 @@ export default function CategoryDialog({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <FieldLabel htmlFor="name" required>
-                                    Name
+                                <FieldLabel htmlFor="label" required>
+                                    Label
                                 </FieldLabel>
 
                                 <Input
-                                    id="name"
-                                    name="name"
-                                    defaultValue={category?.name}
+                                    id="label"
+                                    name="label"
+                                    defaultValue={category?.label}
                                     required
                                     autoFocus
                                     autoComplete="off"
                                     placeholder="Sleep"
                                 />
 
-                                <InputError message={errors.name} />
+                                <InputError message={errors.label} />
                             </div>
 
                             <div className="grid gap-2">

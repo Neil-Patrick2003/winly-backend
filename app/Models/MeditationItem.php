@@ -2,33 +2,39 @@
 
 namespace App\Models;
 
-use Database\Factories\MeditationFactory;
+use App\Actions\CachedMeditationCategories;
+use Database\Factories\MeditationItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * @property int $id
- * @property int $category_id
+ * @property string $id
+ * @property string $category_id
  * @property string $title
- * @property string|null $description
+ * @property string|null $instructions
  * @property string|null $thumbnail
  * @property string|null $audio_url
  * @property string|null $video_url
  * @property int $duration_minutes
+ * @property string|null $created_by
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read string $duration
  * @property-read MeditationCategory $category
+ * @property-read User|null $creator
  */
-#[Fillable(['category_id', 'title', 'description', 'thumbnail', 'audio_url', 'video_url', 'duration_minutes'])]
-class Meditation extends Model
+#[Fillable(['category_id', 'title', 'instructions', 'thumbnail', 'audio_url', 'video_url', 'duration_minutes', 'created_by'])]
+class MeditationItem extends Model
 {
-    /** @use HasFactory<MeditationFactory> */
-    use HasFactory;
+    /** @use HasFactory<MeditationItemFactory> */
+    use HasFactory, HasUuids;
 
     /**
      * The columns that may be sorted from the index screen.
@@ -43,6 +49,17 @@ class Meditation extends Model
     public const MAX_DURATION_MINUTES = 600;
 
     /**
+     * The cached category list carries a meditation_items_count, so it has to
+     * be dropped whenever a session is added, moved between categories, or
+     * removed.
+     */
+    protected static function booted(): void
+    {
+        static::saved(fn () => CachedMeditationCategories::flush());
+        static::deleted(fn () => CachedMeditationCategories::flush());
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -52,6 +69,19 @@ class Meditation extends Model
         return [
             'duration_minutes' => 'integer',
         ];
+    }
+
+    /**
+     * The human-readable session length.
+     *
+     * The length is stored as an integer so it stays sortable and filterable;
+     * this renders it in the display form the clients expect.
+     *
+     * @return Attribute<string, never>
+     */
+    protected function duration(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->duration_minutes.' min');
     }
 
     /**
@@ -65,9 +95,19 @@ class Meditation extends Model
     }
 
     /**
-     * Match meditations whose title or description contains the given term.
+     * The admin who added this session.
      *
-     * @param  Builder<Meditation>  $query
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Match meditations whose title or instructions contain the given term.
+     *
+     * @param  Builder<MeditationItem>  $query
      */
     #[Scope]
     protected function search(Builder $query, ?string $term): void
@@ -77,7 +117,7 @@ class Meditation extends Model
 
             $query->where(function (Builder $query) use ($term): void {
                 $query->where('title', 'like', $term)
-                    ->orWhere('description', 'like', $term);
+                    ->orWhere('instructions', 'like', $term);
             });
         });
     }
@@ -85,18 +125,18 @@ class Meditation extends Model
     /**
      * Limit meditations to a single category.
      *
-     * @param  Builder<Meditation>  $query
+     * @param  Builder<MeditationItem>  $query
      */
     #[Scope]
-    protected function inCategory(Builder $query, ?int $categoryId): void
+    protected function inCategory(Builder $query, ?string $categoryId): void
     {
-        $query->when($categoryId !== null, fn (Builder $query) => $query->where('category_id', $categoryId));
+        $query->when(filled($categoryId), fn (Builder $query) => $query->where('category_id', $categoryId));
     }
 
     /**
      * Limit meditations to a duration range, in minutes.
      *
-     * @param  Builder<Meditation>  $query
+     * @param  Builder<MeditationItem>  $query
      */
     #[Scope]
     protected function durationBetween(Builder $query, ?int $min, ?int $max): void
@@ -108,7 +148,7 @@ class Meditation extends Model
     /**
      * Limit meditations to those created within the given date range.
      *
-     * @param  Builder<Meditation>  $query
+     * @param  Builder<MeditationItem>  $query
      */
     #[Scope]
     protected function createdBetween(Builder $query, ?string $from, ?string $to): void
@@ -120,7 +160,7 @@ class Meditation extends Model
     /**
      * Order the meditations by a whitelisted column.
      *
-     * @param  Builder<Meditation>  $query
+     * @param  Builder<MeditationItem>  $query
      */
     #[Scope]
     protected function sorted(Builder $query, ?string $column, ?string $direction): void

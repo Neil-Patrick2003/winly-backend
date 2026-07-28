@@ -47,13 +47,13 @@ export default function Profile({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="full_name">Name</Label>
 
                                 <Input
-                                    id="name"
+                                    id="full_name"
                                     className="mt-1 block w-full"
-                                    defaultValue={auth.user.name}
-                                    name="name"
+                                    defaultValue={auth.user.full_name}
+                                    name="full_name"
                                     required
                                     autoComplete="name"
                                     placeholder="Full name"
@@ -61,7 +61,7 @@ export default function Profile({
 
                                 <InputError
                                     className="mt-2"
-                                    message={errors.name}
+                                    message={errors.full_name}
                                 />
                             </div>
 

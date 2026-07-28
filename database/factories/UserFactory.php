@@ -18,6 +18,20 @@ class UserFactory extends Factory
     protected static ?string $password;
 
     /**
+     * The cover gradients offered by the clients.
+     *
+     * @var list<string>
+     */
+    protected array $gradients = [
+        'sunrise',
+        'ocean',
+        'forest',
+        'dusk',
+        'lavender',
+        'ember',
+    ];
+
+    /**
      * Define the model's default state.
      *
      * @return array<string, mixed>
@@ -25,15 +39,22 @@ class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
+            'full_name' => fake()->name(),
             'username' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'avatar' => null,
-            'cover_photo' => null,
+            'password_hash' => static::$password ??= Hash::make('password'),
+            'avatar_url' => null,
             'bio' => fake()->sentence(),
+            'cover_gradient' => fake()->randomElement($this->gradients),
+            'streak_days' => 0,
+            'longest_streak' => 0,
+            'followers_count' => 0,
+            'following_count' => 0,
+            'wins_count' => 0,
             'is_private' => false,
+            'is_admin' => false,
+            'last_active_at' => now(),
             'remember_token' => Str::random(10),
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
@@ -58,6 +79,27 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_private' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the user administers the meditation library.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the user is on an active streak.
+     */
+    public function onStreak(int $days = 7): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'streak_days' => $days,
+            'longest_streak' => max($days, $attributes['longest_streak'] ?? 0),
         ]);
     }
 

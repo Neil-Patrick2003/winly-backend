@@ -6,7 +6,10 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -17,16 +20,23 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
- * @property int $id
- * @property string $name
+ * @property string $id
+ * @property string $full_name
  * @property string|null $username
  * @property string $email
  * @property Carbon|null $email_verified_at
- * @property string $password
- * @property string|null $avatar
- * @property string|null $cover_photo
+ * @property string $password_hash
+ * @property string|null $avatar_url
  * @property string|null $bio
+ * @property string|null $cover_gradient
+ * @property int $streak_days
+ * @property int $longest_streak
+ * @property int $followers_count
+ * @property int $following_count
+ * @property int $wins_count
  * @property bool $is_private
+ * @property bool $is_admin
+ * @property Carbon|null $last_active_at
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -35,12 +45,12 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['name', 'username', 'email', 'password', 'avatar', 'cover_photo', 'bio', 'is_private'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Fillable(['full_name', 'username', 'email', 'password_hash', 'avatar_url', 'bio', 'cover_gradient', 'is_private', 'is_admin', 'last_active_at'])]
+#[Hidden(['password_hash', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, HasUuids, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
 
     /**
      * The model's default attribute values.
@@ -48,8 +58,34 @@ class User extends Authenticatable implements PasskeyUser
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'streak_days' => 0,
+        'longest_streak' => 0,
+        'followers_count' => 0,
+        'following_count' => 0,
+        'wins_count' => 0,
         'is_private' => false,
+        'is_admin' => false,
     ];
+
+    /**
+     * Get the name of the column holding the user's hashed password.
+     *
+     * The schema stores it as `password_hash` rather than Laravel's default
+     * `password`, so both the column name and the accessor have to be pointed
+     * at it for the guard, the password broker and the `current_password` rule.
+     */
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
+    }
+
+    /**
+     * Get the user's hashed password.
+     */
+    public function getAuthPassword(): string
+    {
+        return $this->password_hash;
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -60,9 +96,134 @@ class User extends Authenticatable implements PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password_hash' => 'hashed',
+            'streak_days' => 'integer',
+            'longest_streak' => 'integer',
+            'followers_count' => 'integer',
+            'following_count' => 'integer',
+            'wins_count' => 'integer',
             'is_private' => 'boolean',
+            'is_admin' => 'boolean',
+            'last_active_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The small wins this user has posted.
+     *
+     * @return HasMany<Post, $this>
+     */
+    public function posts(): HasMany
+    {
+        return $this->hasMany(Post::class);
+    }
+
+    /**
+     * The comments this user has left on any post.
+     *
+     * @return HasMany<Comment, $this>
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    /**
+     * The likes this user has given.
+     *
+     * @return HasMany<PostLike, $this>
+     */
+    public function postLikes(): HasMany
+    {
+        return $this->hasMany(PostLike::class);
+    }
+
+    /**
+     * The users this user follows.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function following(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'follows', 'follower_id', 'followee_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * The users following this user.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function followers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'follows', 'followee_id', 'follower_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * The communities this user has joined.
+     *
+     * @return BelongsToMany<Community, $this>
+     */
+    public function communities(): BelongsToMany
+    {
+        return $this->belongsToMany(Community::class, 'community_memberships')
+            ->withPivot('joined_at')
+            ->withTimestamps();
+    }
+
+    /**
+     * The membership rows tying this user to communities.
+     *
+     * @return HasMany<CommunityMembership, $this>
+     */
+    public function communityMemberships(): HasMany
+    {
+        return $this->hasMany(CommunityMembership::class);
+    }
+
+    /**
+     * The stories this user has posted, expired ones included.
+     *
+     * @return HasMany<Story, $this>
+     */
+    public function stories(): HasMany
+    {
+        return $this->hasMany(Story::class);
+    }
+
+    /**
+     * The habits this user is tracking.
+     *
+     * @return HasMany<Habit, $this>
+     */
+    public function habits(): HasMany
+    {
+        return $this->hasMany(Habit::class);
+    }
+
+    /**
+     * Every habit entry this user has logged.
+     *
+     * @return HasMany<HabitLog, $this>
+     */
+    public function habitLogs(): HasMany
+    {
+        return $this->hasMany(HabitLog::class);
+    }
+
+    /**
+     * The in-app notifications addressed to this user.
+     *
+     * This deliberately shadows the database-notification relation from
+     * `Notifiable`; the app stores its own notification shape in `notifications`
+     * and only uses `Notifiable` for the mail channel.
+     *
+     * @return HasMany<Notification, $this>
+     */
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(Notification::class);
     }
 }

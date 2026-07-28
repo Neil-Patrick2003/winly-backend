@@ -190,9 +190,11 @@ export default function MeditationIndex({
                                                     {meditation.title}
                                                 </p>
 
-                                                {meditation.description && (
+                                                {meditation.instructions && (
                                                     <p className="line-clamp-1 text-[12px] text-muted-foreground">
-                                                        {meditation.description}
+                                                        {
+                                                            meditation.instructions
+                                                        }
                                                     </p>
                                                 )}
                                             </TableCell>
@@ -200,7 +202,7 @@ export default function MeditationIndex({
                                             <TableCell className="hidden py-2 sm:table-cell">
                                                 <span className="inline-flex items-center gap-1.5 rounded-sm bg-meditation-bg px-2 py-0.5 text-[12px] font-medium text-meditation-icon">
                                                     <CategoryIcon className="size-3.5" />
-                                                    {meditation.category.name}
+                                                    {meditation.category.label}
                                                 </span>
                                             </TableCell>
 

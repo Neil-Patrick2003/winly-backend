@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use App\Models\User;
 use Database\Seeders\MeditationCategorySeeder;
 use Inertia\Testing\AssertableInertia;
@@ -25,7 +25,7 @@ test('the index lists categories', function () {
             ->component('meditation-categories/index')
             ->has('categories.data', 3)
             ->where('totalCount', 3)
-            ->where('filters.sort', 'name')
+            ->where('filters.sort', 'label')
             ->where('filters.direction', 'asc')
         );
 });
@@ -41,42 +41,42 @@ test('the index paginates using the requested page size', function () {
         );
 });
 
-test('search matches the name', function () {
-    MeditationCategory::factory()->create(['name' => 'Deep Sleep']);
-    MeditationCategory::factory()->create(['name' => 'Focus']);
+test('search matches the label', function () {
+    MeditationCategory::factory()->create(['label' => 'Deep Sleep']);
+    MeditationCategory::factory()->create(['label' => 'Focus']);
 
     $this->get(route('meditation-categories.index', ['search' => 'sleep']))
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('categories.data', 1)
-            ->where('categories.data.0.name', 'Deep Sleep')
+            ->where('categories.data.0.label', 'Deep Sleep')
         );
 });
 
 test('search matches the description', function () {
-    MeditationCategory::factory()->create(['name' => 'Focus', 'description' => 'Settle a racing mind.']);
-    MeditationCategory::factory()->create(['name' => 'Sleep', 'description' => 'Wind down for the night.']);
+    MeditationCategory::factory()->create(['label' => 'Focus', 'description' => 'Settle a racing mind.']);
+    MeditationCategory::factory()->create(['label' => 'Sleep', 'description' => 'Wind down for the night.']);
 
     $this->get(route('meditation-categories.index', ['search' => 'racing']))
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('categories.data', 1)
-            ->where('categories.data.0.name', 'Focus')
+            ->where('categories.data.0.label', 'Focus')
         );
 });
 
 test('search treats wildcards as literal characters', function () {
-    MeditationCategory::factory()->create(['name' => 'Focus']);
+    MeditationCategory::factory()->create(['label' => 'Focus']);
 
     $this->get(route('meditation-categories.index', ['search' => '%']))
         ->assertInertia(fn (AssertableInertia $page) => $page->has('categories.data', 0));
 });
 
 test('categories can be sorted', function () {
-    MeditationCategory::factory()->create(['name' => 'Alpha']);
-    MeditationCategory::factory()->create(['name' => 'Zulu']);
+    MeditationCategory::factory()->create(['label' => 'Alpha']);
+    MeditationCategory::factory()->create(['label' => 'Zulu']);
 
-    $this->get(route('meditation-categories.index', ['sort' => 'name', 'direction' => 'desc']))
+    $this->get(route('meditation-categories.index', ['sort' => 'label', 'direction' => 'desc']))
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('categories.data.0.name', 'Zulu')
+            ->where('categories.data.0.label', 'Zulu')
         );
 });
 
@@ -86,8 +86,8 @@ test('an unknown sort column is rejected', function () {
 });
 
 test('categories can be filtered by created date range', function () {
-    MeditationCategory::factory()->create(['name' => 'Old', 'created_at' => now()->subMonth()]);
-    MeditationCategory::factory()->create(['name' => 'Recent', 'created_at' => now()]);
+    MeditationCategory::factory()->create(['label' => 'Old', 'created_at' => now()->subMonth()]);
+    MeditationCategory::factory()->create(['label' => 'Recent', 'created_at' => now()]);
 
     $this->get(route('meditation-categories.index', [
         'from' => now()->subDays(2)->toDateString(),
@@ -95,7 +95,7 @@ test('categories can be filtered by created date range', function () {
     ]))
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('categories.data', 1)
-            ->where('categories.data.0.name', 'Recent')
+            ->where('categories.data.0.label', 'Recent')
         );
 });
 
@@ -113,21 +113,21 @@ test('an unsupported page size is rejected', function () {
 test('a category can be created', function () {
     $this->from(route('meditation-categories.index'))
         ->post(route('meditation-categories.store'), [
-            'name' => '  Breathwork  ',
+            'label' => '  Breathwork  ',
             'icon' => 'wind',
             'description' => 'Paced breathing patterns.',
         ])->assertRedirect(route('meditation-categories.index'));
 
     $category = MeditationCategory::sole();
 
-    expect($category->name)->toBe('Breathwork');
+    expect($category->label)->toBe('Breathwork');
     expect($category->icon)->toBe('wind');
     expect($category->description)->toBe('Paced breathing patterns.');
 });
 
 test('a category can be created without a description', function () {
     $this->post(route('meditation-categories.store'), [
-        'name' => 'Focus',
+        'label' => 'Focus',
         'icon' => 'brain',
         'description' => null,
     ])->assertRedirect();
@@ -135,53 +135,53 @@ test('a category can be created without a description', function () {
     expect(MeditationCategory::sole()->description)->toBeNull();
 });
 
-test('creating requires a name and a known icon', function () {
-    $this->post(route('meditation-categories.store'), ['name' => '', 'icon' => 'not-an-icon'])
-        ->assertInvalid(['name', 'icon']);
+test('creating requires a label and a known icon', function () {
+    $this->post(route('meditation-categories.store'), ['label' => '', 'icon' => 'not-an-icon'])
+        ->assertInvalid(['label', 'icon']);
 
     expect(MeditationCategory::count())->toBe(0);
 });
 
-test('category names must be unique', function () {
-    MeditationCategory::factory()->create(['name' => 'Sleep']);
+test('category labels must be unique', function () {
+    MeditationCategory::factory()->create(['label' => 'Sleep']);
 
-    $this->post(route('meditation-categories.store'), ['name' => 'Sleep', 'icon' => 'moon'])
-        ->assertInvalid('name');
+    $this->post(route('meditation-categories.store'), ['label' => 'Sleep', 'icon' => 'moon'])
+        ->assertInvalid('label');
 });
 
 test('a category can be updated', function () {
-    $category = MeditationCategory::factory()->create(['name' => 'Sleep', 'icon' => 'moon']);
+    $category = MeditationCategory::factory()->create(['label' => 'Sleep', 'icon' => 'moon']);
 
     $this->from(route('meditation-categories.index'))
         ->put(route('meditation-categories.update', $category), [
-            'name' => 'Deep Sleep',
+            'label' => 'Deep Sleep',
             'icon' => 'cloud-moon',
             'description' => 'Longer body scans.',
         ])->assertRedirect(route('meditation-categories.index'));
 
     expect($category->fresh())
-        ->name->toBe('Deep Sleep')
+        ->label->toBe('Deep Sleep')
         ->icon->toBe('cloud-moon')
         ->description->toBe('Longer body scans.');
 });
 
-test('a category keeps its own name when updated', function () {
-    $category = MeditationCategory::factory()->create(['name' => 'Sleep']);
+test('a category keeps its own label when updated', function () {
+    $category = MeditationCategory::factory()->create(['label' => 'Sleep']);
 
     $this->put(route('meditation-categories.update', $category), [
-        'name' => 'Sleep',
+        'label' => 'Sleep',
         'icon' => 'moon',
     ])->assertValid();
 });
 
-test('a category cannot take another category name', function () {
-    MeditationCategory::factory()->create(['name' => 'Focus']);
-    $category = MeditationCategory::factory()->create(['name' => 'Sleep']);
+test('a category cannot take another category label', function () {
+    MeditationCategory::factory()->create(['label' => 'Focus']);
+    $category = MeditationCategory::factory()->create(['label' => 'Sleep']);
 
     $this->put(route('meditation-categories.update', $category), [
-        'name' => 'Focus',
+        'label' => 'Focus',
         'icon' => 'moon',
-    ])->assertInvalid('name');
+    ])->assertInvalid('label');
 });
 
 test('the index carries everything the edit dialog needs', function () {
@@ -193,7 +193,7 @@ test('the index carries everything the edit dialog needs', function () {
             ->has('iconOptions')
             ->has('categories.data.0', fn (AssertableInertia $row) => $row
                 ->where('id', $category->id)
-                ->where('name', $category->name)
+                ->where('label', $category->label)
                 ->where('icon', $category->icon)
                 ->where('description', $category->description)
                 ->etc()
@@ -203,7 +203,7 @@ test('the index carries everything the edit dialog needs', function () {
 
 test('the index reports how many sessions are filed', function () {
     $category = MeditationCategory::factory()->create();
-    Meditation::factory()->count(2)->inCategory($category)->create();
+    MeditationItem::factory()->count(2)->inCategory($category)->create();
 
     $this->get(route('meditation-categories.index'))
         ->assertInertia(fn (AssertableInertia $page) => $page->where('meditationCount', 2));

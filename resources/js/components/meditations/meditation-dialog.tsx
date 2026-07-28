@@ -30,7 +30,7 @@ export type MeditationDraft = Pick<
     | 'id'
     | 'category_id'
     | 'title'
-    | 'description'
+    | 'instructions'
     | 'thumbnail'
     | 'audio_url'
     | 'video_url'
@@ -134,7 +134,7 @@ export default function MeditationDialog({
                                                     key={category.id}
                                                     value={String(category.id)}
                                                 >
-                                                    {category.name}
+                                                    {category.label}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -172,21 +172,23 @@ export default function MeditationDialog({
                             </div>
 
                             <div className="grid gap-2">
-                                <FieldLabel htmlFor="description">
-                                    Description
+                                <FieldLabel htmlFor="instructions">
+                                    Instructions
                                 </FieldLabel>
 
                                 <textarea
-                                    id="description"
-                                    name="description"
+                                    id="instructions"
+                                    name="instructions"
                                     rows={3}
-                                    defaultValue={meditation?.description ?? ''}
+                                    defaultValue={
+                                        meditation?.instructions ?? ''
+                                    }
                                     maxLength={2000}
                                     placeholder="What the session covers, and who it is for."
                                     className={textareaClasses}
                                 />
 
-                                <InputError message={errors.description} />
+                                <InputError message={errors.instructions} />
                             </div>
 
                             <div className="grid gap-2">

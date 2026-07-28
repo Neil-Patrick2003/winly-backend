@@ -50,7 +50,7 @@ class IndexMeditationCategoryRequest extends FormRequest
     {
         return [
             'search' => $this->filled('search') ? trim($this->string('search')->value()) : null,
-            'sort' => (string) $this->input('sort', 'name'),
+            'sort' => (string) $this->input('sort', 'label'),
             'direction' => (string) $this->input('direction', 'asc'),
             'from' => $this->filled('from') ? (string) $this->input('from') : null,
             'to' => $this->filled('to') ? (string) $this->input('to') : null,

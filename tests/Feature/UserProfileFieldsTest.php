@@ -9,16 +9,16 @@ uses(RefreshDatabase::class);
 test('users have profile columns', function () {
     $user = User::factory()->create([
         'username' => 'winly',
-        'avatar' => 'avatars/winly.jpg',
-        'cover_photo' => 'covers/winly.jpg',
+        'avatar_url' => 'avatars/winly.jpg',
+        'cover_gradient' => 'sunrise',
         'bio' => 'Hello there.',
         'is_private' => true,
     ]);
 
     expect($user->fresh())
         ->username->toBe('winly')
-        ->avatar->toBe('avatars/winly.jpg')
-        ->cover_photo->toBe('covers/winly.jpg')
+        ->avatar_url->toBe('avatars/winly.jpg')
+        ->cover_gradient->toBe('sunrise')
         ->bio->toBe('Hello there.')
         ->is_private->toBeTrue();
 });

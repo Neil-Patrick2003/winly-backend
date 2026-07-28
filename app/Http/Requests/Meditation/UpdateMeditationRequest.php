@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Meditation;
 
 use App\Concerns\MeditationValidationRules;
-use App\Models\Meditation;
+use App\Models\MeditationItem;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -36,7 +36,7 @@ class UpdateMeditationRequest extends FormRequest
      */
     public function rules(): array
     {
-        /** @var Meditation $meditation */
+        /** @var MeditationItem $meditation */
         $meditation = $this->route('meditation');
 
         return $this->meditationRules($meditation->id);

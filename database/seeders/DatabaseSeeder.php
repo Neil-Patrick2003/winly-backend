@@ -17,8 +17,8 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
+        User::factory()->admin()->create([
+            'full_name' => 'Test User',
             'username' => 'test_user',
             'email' => 'test@example.com',
         ]);
@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             MeditationCategorySeeder::class,
             MeditationSeeder::class,
+            SocialGraphSeeder::class,
         ]);
     }
 }

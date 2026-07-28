@@ -9,7 +9,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 function registrationPayload(array $overrides = []): array
 {
     return array_merge([
-        'name' => 'Neil Mulingbayan',
+        'full_name' => 'Neil Mulingbayan',
         'username' => 'neil_m',
         'email' => 'neil@example.com',
         'password' => 'password-password',
@@ -24,17 +24,17 @@ test('a user can register and receive an api token', function () {
     $response = $this->postJson(route('api.v1.register'), registrationPayload());
 
     $response->assertCreated()
-        ->assertJsonPath('user.name', 'Neil Mulingbayan')
+        ->assertJsonPath('user.full_name', 'Neil Mulingbayan')
         ->assertJsonPath('user.username', 'neil_m')
         ->assertJsonPath('user.email', 'neil@example.com')
         ->assertJsonPath('user.is_private', false)
         ->assertJsonStructure(['user' => ['id', 'created_at'], 'token'])
-        ->assertJsonMissingPath('user.password');
+        ->assertJsonMissingPath('user.password_hash');
 
     $user = User::firstWhere('email', 'neil@example.com');
 
     expect($user)->not->toBeNull();
-    expect(Hash::check('password-password', $user->password))->toBeTrue();
+    expect(Hash::check('password-password', $user->password_hash))->toBeTrue();
 
     Event::assertDispatched(Registered::class);
 
@@ -61,7 +61,7 @@ test('guests cannot access protected api routes', function () {
 test('registration requires all fields', function () {
     $this->postJson(route('api.v1.register'), [])
         ->assertUnprocessable()
-        ->assertJsonValidationErrors(['name', 'username', 'email', 'password', 'device_name']);
+        ->assertJsonValidationErrors(['full_name', 'username', 'email', 'password', 'device_name']);
 });
 
 test('the email must be unique', function () {

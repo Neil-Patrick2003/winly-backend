@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Api\V1\Auth\RegisteredUserController;
+use App\Http\Controllers\Api\V1\MeditationCategoryController;
 use App\Http\Resources\Api\V1\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -20,5 +21,11 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
 
         Route::get('user', fn (Request $request) => new UserResource($request->user()))
             ->name('user');
+
+        // The catalogue is the same for every reader, so it is cached once
+        // server-side and revalidated by the client with an ETag.
+        Route::get('meditation-categories', [MeditationCategoryController::class, 'index'])
+            ->middleware('cache.headers:public;max_age=300;etag')
+            ->name('meditation-categories.index');
     });
 });

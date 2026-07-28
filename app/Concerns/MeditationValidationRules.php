@@ -2,8 +2,8 @@
 
 namespace App\Concerns;
 
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
@@ -14,16 +14,16 @@ trait MeditationValidationRules
      *
      * @return array<string, array<int, ValidationRule|array<mixed>|string>>
      */
-    protected function meditationRules(?int $meditationId = null): array
+    protected function meditationRules(?string $meditationId = null): array
     {
         return [
-            'category_id' => ['required', 'integer', Rule::exists(MeditationCategory::class, 'id')],
+            'category_id' => ['required', 'uuid', Rule::exists(MeditationCategory::class, 'id')],
             'title' => $this->titleRules($meditationId),
-            'description' => ['nullable', 'string', 'max:2000'],
+            'instructions' => ['nullable', 'string', 'max:2000'],
             'thumbnail' => ['nullable', 'string', 'max:2048'],
             'audio_url' => $this->mediaUrlRules(),
             'video_url' => $this->mediaUrlRules(),
-            'duration_minutes' => ['required', 'integer', 'min:1', 'max:'.Meditation::MAX_DURATION_MINUTES],
+            'duration_minutes' => ['required', 'integer', 'min:1', 'max:'.MeditationItem::MAX_DURATION_MINUTES],
         ];
     }
 
@@ -34,9 +34,9 @@ trait MeditationValidationRules
      *
      * @return array<int, ValidationRule|array<mixed>|string>
      */
-    protected function titleRules(?int $meditationId = null): array
+    protected function titleRules(?string $meditationId = null): array
     {
-        $unique = Rule::unique(Meditation::class, 'title')
+        $unique = Rule::unique(MeditationItem::class, 'title')
             ->where('category_id', $this->input('category_id'));
 
         return [

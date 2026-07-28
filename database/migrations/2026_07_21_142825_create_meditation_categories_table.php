@@ -12,10 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('meditation_categories', function (Blueprint $table) {
-            $table->id();
-            $table->string('name')->unique();
+            $table->uuid('id')->primary();
+            $table->string('label')->unique();
+            $table->string('slug')->unique();
             $table->string('icon');
             $table->text('description')->nullable();
+            $table->foreignUuid('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->index('created_at');

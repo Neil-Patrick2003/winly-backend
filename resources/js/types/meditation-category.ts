@@ -1,12 +1,13 @@
 export type MeditationCategory = {
-    id: number;
-    name: string;
+    id: string;
+    label: string;
+    slug: string;
     icon: string;
     description: string | null;
     created_at: string;
 };
 
-export type MeditationCategorySort = 'name' | 'created_at' | 'updated_at';
+export type MeditationCategorySort = 'label' | 'created_at' | 'updated_at';
 
 export type MeditationCategoryFilters = {
     search: string | null;
@@ -37,16 +38,16 @@ export type Paginated<T> = {
 };
 
 export type MeditationCategoryOption = {
-    id: number;
-    name: string;
+    id: string;
+    label: string;
     icon: string;
 };
 
 export type Meditation = {
-    id: number;
-    category_id: number;
+    id: string;
+    category_id: string;
     title: string;
-    description: string | null;
+    instructions: string | null;
     thumbnail: string | null;
     audio_url: string | null;
     video_url: string | null;
@@ -60,7 +61,7 @@ export type MeditationSort =
 
 export type MeditationFilters = {
     search: string | null;
-    category_id: number | null;
+    category_id: string | null;
     sort: MeditationSort;
     direction: 'asc' | 'desc';
     min_duration: number | null;

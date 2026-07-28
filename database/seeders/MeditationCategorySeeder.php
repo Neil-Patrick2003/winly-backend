@@ -4,52 +4,53 @@ namespace Database\Seeders;
 
 use App\Models\MeditationCategory;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class MeditationCategorySeeder extends Seeder
 {
     /**
      * The starting set of categories.
      *
-     * @var list<array{name: string, icon: string, description: string}>
+     * @var list<array{label: string, icon: string, description: string}>
      */
     protected array $categories = [
         [
-            'name' => 'Sleep',
+            'label' => 'Sleep',
             'icon' => 'moon',
             'description' => 'Wind-down sessions and body scans that carry you into deep rest.',
         ],
         [
-            'name' => 'Anxiety Relief',
+            'label' => 'Anxiety Relief',
             'icon' => 'waves',
             'description' => 'Grounding practices for racing thoughts and a tight chest.',
         ],
         [
-            'name' => 'Focus',
+            'label' => 'Focus',
             'icon' => 'brain',
             'description' => 'Short attention-training sessions to settle in before deep work.',
         ],
         [
-            'name' => 'Morning Wake-Up',
+            'label' => 'Morning Wake-Up',
             'icon' => 'sunrise',
             'description' => 'Gentle openers that set an intention for the day ahead.',
         ],
         [
-            'name' => 'Breathwork',
+            'label' => 'Breathwork',
             'icon' => 'wind',
             'description' => 'Paced breathing patterns, from box breathing to extended exhales.',
         ],
         [
-            'name' => 'Self-Compassion',
+            'label' => 'Self-Compassion',
             'icon' => 'heart-pulse',
             'description' => 'Loving-kindness practices for the days you are hardest on yourself.',
         ],
         [
-            'name' => 'Walking Meditation',
+            'label' => 'Walking Meditation',
             'icon' => 'mountain-snow',
             'description' => 'Movement-based awareness you can practise outdoors.',
         ],
         [
-            'name' => 'Gratitude',
+            'label' => 'Gratitude',
             'icon' => 'sparkles',
             'description' => 'Reflective sessions that widen your attention to what is already good.',
         ],
@@ -62,8 +63,8 @@ class MeditationCategorySeeder extends Seeder
     {
         foreach ($this->categories as $category) {
             MeditationCategory::updateOrCreate(
-                ['name' => $category['name']],
-                $category,
+                ['label' => $category['label']],
+                [...$category, 'slug' => Str::slug($category['label'])],
             );
         }
     }

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use App\Models\User;
 use Database\Seeders\MeditationCategorySeeder;
 use Database\Seeders\MeditationSeeder;
@@ -9,7 +9,7 @@ use Inertia\Testing\AssertableInertia;
 
 beforeEach(function () {
     $this->actingAs(User::factory()->create());
-    $this->category = MeditationCategory::factory()->create(['name' => 'Sleep']);
+    $this->category = MeditationCategory::factory()->create(['label' => 'Sleep']);
 });
 
 function meditationPayload(array $overrides = []): array
@@ -17,7 +17,7 @@ function meditationPayload(array $overrides = []): array
     return array_merge([
         'category_id' => test()->category->id,
         'title' => 'Body Scan for Deep Rest',
-        'description' => 'A slow pass from head to toe.',
+        'instructions' => 'A slow pass from head to toe.',
         'thumbnail' => 'thumbnails/body-scan.jpg',
         'audio_url' => 'https://cdn.winly.test/audio/body-scan.mp3',
         'video_url' => null,
@@ -32,7 +32,7 @@ test('guests are redirected away from the index', function () {
 });
 
 test('the index lists meditations with their category', function () {
-    Meditation::factory()->count(3)->inCategory($this->category)->create();
+    MeditationItem::factory()->count(3)->inCategory($this->category)->create();
 
     $this->get(route('meditations.index'))
         ->assertOk()
@@ -40,7 +40,7 @@ test('the index lists meditations with their category', function () {
             ->component('meditations/index')
             ->has('meditations.data', 3)
             ->has('meditations.data.0.category', fn (AssertableInertia $category) => $category
-                ->where('name', 'Sleep')
+                ->where('label', 'Sleep')
                 ->hasAll(['id', 'icon'])
             )
             ->where('totalCount', 3)
@@ -49,7 +49,7 @@ test('the index lists meditations with their category', function () {
 });
 
 test('the index does not run a query per row', function () {
-    Meditation::factory()->count(5)->inCategory($this->category)->create();
+    MeditationItem::factory()->count(5)->inCategory($this->category)->create();
 
     DB::enableQueryLog();
 
@@ -60,8 +60,8 @@ test('the index does not run a query per row', function () {
 });
 
 test('search matches the title', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Rain on a Quiet Roof']);
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Box Breathing']);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Rain on a Quiet Roof']);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Box Breathing']);
 
     $this->get(route('meditations.index', ['search' => 'rain']))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -71,10 +71,10 @@ test('search matches the title', function () {
 });
 
 test('meditations can be filtered by category', function () {
-    $focus = MeditationCategory::factory()->create(['name' => 'Focus']);
+    $focus = MeditationCategory::factory()->create(['label' => 'Focus']);
 
-    Meditation::factory()->inCategory($this->category)->create();
-    Meditation::factory()->inCategory($focus)->create(['title' => 'Deep Work Primer']);
+    MeditationItem::factory()->inCategory($this->category)->create();
+    MeditationItem::factory()->inCategory($focus)->create(['title' => 'Deep Work Primer']);
 
     $this->get(route('meditations.index', ['category_id' => $focus->id]))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -88,8 +88,8 @@ test('an unknown category filter is rejected', function () {
 });
 
 test('meditations can be filtered by duration range', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Quick', 'duration_minutes' => 5]);
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Long', 'duration_minutes' => 40]);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Quick', 'duration_minutes' => 5]);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Long', 'duration_minutes' => 40]);
 
     $this->get(route('meditations.index', ['min_duration' => 10, 'max_duration' => 60]))
         ->assertInertia(fn (AssertableInertia $page) => $page
@@ -104,8 +104,8 @@ test('the duration range must not be inverted', function () {
 });
 
 test('meditations can be filtered by created date range', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Old', 'created_at' => now()->subMonth()]);
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Recent']);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Old', 'created_at' => now()->subMonth()]);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Recent']);
 
     $this->get(route('meditations.index', [
         'from' => now()->subDays(2)->toDateString(),
@@ -118,8 +118,8 @@ test('meditations can be filtered by created date range', function () {
 });
 
 test('meditations can be sorted by duration', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Short', 'duration_minutes' => 5]);
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Long', 'duration_minutes' => 40]);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Short', 'duration_minutes' => 5]);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Long', 'duration_minutes' => 40]);
 
     $this->get(route('meditations.index', ['sort' => 'duration_minutes', 'direction' => 'desc']))
         ->assertInertia(fn (AssertableInertia $page) => $page->where('meditations.data.0.title', 'Long'));
@@ -134,7 +134,7 @@ test('a meditation can be created', function () {
         ->post(route('meditations.store'), meditationPayload(['title' => '  Body Scan  ']))
         ->assertRedirect(route('meditations.index'));
 
-    $meditation = Meditation::sole();
+    $meditation = MeditationItem::sole();
 
     expect($meditation->title)->toBe('Body Scan');
     expect($meditation->duration_minutes)->toBe(22);
@@ -145,7 +145,7 @@ test('creating requires a title, category and duration', function () {
     $this->post(route('meditations.store'), [])
         ->assertInvalid(['category_id', 'title', 'duration_minutes']);
 
-    expect(Meditation::count())->toBe(0);
+    expect(MeditationItem::count())->toBe(0);
 });
 
 test('media links must be valid urls', function () {
@@ -161,26 +161,26 @@ test('the duration must be within range', function (int $duration) {
 })->with(['zero' => 0, 'negative' => -5, 'too long' => 601]);
 
 test('titles must be unique within a category', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
 
     $this->post(route('meditations.store'), meditationPayload(['title' => 'Body Scan']))
         ->assertInvalid('title');
 });
 
 test('the same title may be reused in another category', function () {
-    Meditation::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
-    $focus = MeditationCategory::factory()->create(['name' => 'Focus']);
+    MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
+    $focus = MeditationCategory::factory()->create(['label' => 'Focus']);
 
     $this->post(route('meditations.store'), meditationPayload([
         'category_id' => $focus->id,
         'title' => 'Body Scan',
     ]))->assertValid();
 
-    expect(Meditation::count())->toBe(2);
+    expect(MeditationItem::count())->toBe(2);
 });
 
 test('a meditation can be updated', function () {
-    $meditation = Meditation::factory()->inCategory($this->category)->create();
+    $meditation = MeditationItem::factory()->inCategory($this->category)->create();
 
     $this->from(route('meditations.index'))
         ->put(route('meditations.update', $meditation), meditationPayload([
@@ -194,14 +194,14 @@ test('a meditation can be updated', function () {
 });
 
 test('a meditation keeps its own title when updated', function () {
-    $meditation = Meditation::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
+    $meditation = MeditationItem::factory()->inCategory($this->category)->create(['title' => 'Body Scan']);
 
     $this->put(route('meditations.update', $meditation), meditationPayload(['title' => 'Body Scan']))
         ->assertValid();
 });
 
 test('the index carries everything the edit dialog needs', function () {
-    $meditation = Meditation::factory()->inCategory($this->category)->create();
+    $meditation = MeditationItem::factory()->inCategory($this->category)->create();
 
     $this->get(route('meditations.index'))
         ->assertOk()
@@ -212,7 +212,7 @@ test('the index carries everything the edit dialog needs', function () {
                 ->where('id', $meditation->id)
                 ->where('category_id', $meditation->category_id)
                 ->where('title', $meditation->title)
-                ->where('description', $meditation->description)
+                ->where('instructions', $meditation->instructions)
                 ->where('thumbnail', $meditation->thumbnail)
                 ->where('audio_url', $meditation->audio_url)
                 ->where('video_url', $meditation->video_url)
@@ -223,21 +223,21 @@ test('the index carries everything the edit dialog needs', function () {
 });
 
 test('a meditation can be deleted', function () {
-    $meditation = Meditation::factory()->inCategory($this->category)->create();
+    $meditation = MeditationItem::factory()->inCategory($this->category)->create();
 
     $this->from(route('meditations.index'))
         ->delete(route('meditations.destroy', $meditation))
         ->assertRedirect(route('meditations.index'));
 
-    expect(Meditation::count())->toBe(0);
+    expect(MeditationItem::count())->toBe(0);
 });
 
 test('deleting a category deletes its meditations', function () {
-    Meditation::factory()->count(2)->inCategory($this->category)->create();
+    MeditationItem::factory()->count(2)->inCategory($this->category)->create();
 
     $this->delete(route('meditation-categories.destroy', $this->category));
 
-    expect(Meditation::count())->toBe(0);
+    expect(MeditationItem::count())->toBe(0);
     expect(MeditationCategory::count())->toBe(0);
 });
 
@@ -246,5 +246,5 @@ test('the seeder is idempotent', function () {
     $this->seed(MeditationSeeder::class);
     $this->seed(MeditationSeeder::class);
 
-    expect(Meditation::count())->toBe(14);
+    expect(MeditationItem::count())->toBe(14);
 });

@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Meditation\IndexMeditationRequest;
 use App\Http\Requests\Meditation\StoreMeditationRequest;
 use App\Http\Requests\Meditation\UpdateMeditationRequest;
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -21,9 +21,9 @@ class MeditationController extends Controller
     {
         $filters = $request->filters();
 
-        $meditations = Meditation::query()
-            ->select(['id', 'category_id', 'title', 'description', 'thumbnail', 'audio_url', 'video_url', 'duration_minutes', 'created_at'])
-            ->with('category:id,name,icon')
+        $meditations = MeditationItem::query()
+            ->select(['id', 'category_id', 'title', 'instructions', 'thumbnail', 'audio_url', 'video_url', 'duration_minutes', 'created_at'])
+            ->with('category:id,label,icon')
             ->search($filters['search'])
             ->inCategory($filters['category_id'])
             ->durationBetween($filters['min_duration'], $filters['max_duration'])
@@ -36,9 +36,9 @@ class MeditationController extends Controller
             'meditations' => $meditations,
             'filters' => $filters,
             'categories' => Inertia::once(fn (): Collection => $this->categoryOptions()),
-            'totalCount' => Inertia::once(fn (): int => Meditation::query()->count()),
-            'totalMinutes' => Inertia::once(fn (): int => (int) Meditation::query()->sum('duration_minutes')),
-            'maxDuration' => Meditation::MAX_DURATION_MINUTES,
+            'totalCount' => Inertia::once(fn (): int => MeditationItem::query()->count()),
+            'totalMinutes' => Inertia::once(fn (): int => (int) MeditationItem::query()->sum('duration_minutes')),
+            'maxDuration' => MeditationItem::MAX_DURATION_MINUTES,
             'perPageOptions' => IndexMeditationRequest::PER_PAGE_OPTIONS,
         ]);
     }
@@ -48,7 +48,7 @@ class MeditationController extends Controller
      */
     public function store(StoreMeditationRequest $request): RedirectResponse
     {
-        $meditation = Meditation::create($request->validated());
+        $meditation = MeditationItem::create($request->validated());
 
         Inertia::flash('toast', [
             'type' => 'success',
@@ -61,7 +61,7 @@ class MeditationController extends Controller
     /**
      * Update the given meditation.
      */
-    public function update(UpdateMeditationRequest $request, Meditation $meditation): RedirectResponse
+    public function update(UpdateMeditationRequest $request, MeditationItem $meditation): RedirectResponse
     {
         $meditation->update($request->validated());
 
@@ -76,7 +76,7 @@ class MeditationController extends Controller
     /**
      * Delete the given meditation.
      */
-    public function destroy(Meditation $meditation): RedirectResponse
+    public function destroy(MeditationItem $meditation): RedirectResponse
     {
         $meditation->delete();
 
@@ -96,8 +96,8 @@ class MeditationController extends Controller
     protected function categoryOptions(): Collection
     {
         return MeditationCategory::query()
-            ->select(['id', 'name', 'icon'])
-            ->orderBy('name')
+            ->select(['id', 'label', 'icon'])
+            ->orderBy('label')
             ->get();
     }
 }

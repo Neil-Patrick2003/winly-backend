@@ -53,7 +53,7 @@ export default function MeditationFilterBar({
         activeFilters.push({
             key: 'category_id',
             label: 'Category',
-            value: category?.name ?? 'Unknown',
+            value: category?.label ?? 'Unknown',
             onClear: () => setFilter('category_id', null),
         });
     }
@@ -133,7 +133,7 @@ export default function MeditationFilterBar({
                                 key={category.id}
                                 value={String(category.id)}
                             >
-                                {category.name}
+                                {category.label}
                             </SelectItem>
                         ))}
                     </SelectContent>

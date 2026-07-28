@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Meditation;
 
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -34,11 +34,11 @@ class IndexMeditationRequest extends FormRequest
     {
         return [
             'search' => ['nullable', 'string', 'max:255'],
-            'category_id' => ['nullable', 'integer', Rule::exists(MeditationCategory::class, 'id')],
-            'sort' => ['nullable', 'string', Rule::in(Meditation::SORTABLE_COLUMNS)],
+            'category_id' => ['nullable', 'uuid', Rule::exists(MeditationCategory::class, 'id')],
+            'sort' => ['nullable', 'string', Rule::in(MeditationItem::SORTABLE_COLUMNS)],
             'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
-            'min_duration' => ['nullable', 'integer', 'min:0', 'max:'.Meditation::MAX_DURATION_MINUTES],
-            'max_duration' => ['nullable', 'integer', 'min:0', 'max:'.Meditation::MAX_DURATION_MINUTES, 'gte:min_duration'],
+            'min_duration' => ['nullable', 'integer', 'min:0', 'max:'.MeditationItem::MAX_DURATION_MINUTES],
+            'max_duration' => ['nullable', 'integer', 'min:0', 'max:'.MeditationItem::MAX_DURATION_MINUTES, 'gte:min_duration'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'per_page' => ['nullable', 'integer', Rule::in(self::PER_PAGE_OPTIONS)],
@@ -48,13 +48,13 @@ class IndexMeditationRequest extends FormRequest
     /**
      * Get the filters to apply to the query, with defaults filled in.
      *
-     * @return array{search: string|null, category_id: int|null, sort: string, direction: string, min_duration: int|null, max_duration: int|null, from: string|null, to: string|null, per_page: int}
+     * @return array{search: string|null, category_id: string|null, sort: string, direction: string, min_duration: int|null, max_duration: int|null, from: string|null, to: string|null, per_page: int}
      */
     public function filters(): array
     {
         return [
             'search' => $this->filled('search') ? trim($this->string('search')->value()) : null,
-            'category_id' => $this->filled('category_id') ? (int) $this->input('category_id') : null,
+            'category_id' => $this->filled('category_id') ? (string) $this->input('category_id') : null,
             'sort' => (string) $this->input('sort', 'title'),
             'direction' => (string) $this->input('direction', 'asc'),
             'min_duration' => $this->filled('min_duration') ? (int) $this->input('min_duration') : null,

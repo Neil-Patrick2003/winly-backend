@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\MeditationCategory;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
 
 /**
  * @extends Factory<MeditationCategory>
@@ -17,10 +18,14 @@ class MeditationCategoryFactory extends Factory
      */
     public function definition(): array
     {
+        $label = fake()->unique()->words(2, true);
+
         return [
-            'name' => fake()->unique()->words(2, true),
+            'label' => Str::title($label),
+            'slug' => Str::slug($label),
             'icon' => fake()->randomElement(MeditationCategory::ICONS),
             'description' => fake()->sentence(12),
+            'created_by' => null,
         ];
     }
 

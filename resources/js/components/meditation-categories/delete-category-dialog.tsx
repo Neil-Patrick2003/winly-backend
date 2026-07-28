@@ -29,7 +29,7 @@ export default function DeleteCategoryDialog({
                     variant="ghost"
                     size="icon"
                     className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete ${category.name}`}
+                    aria-label={`Delete ${category.label}`}
                     data-test={`delete-category-${category.id}`}
                 >
                     <Trash2 className="size-4" />
@@ -38,7 +38,7 @@ export default function DeleteCategoryDialog({
 
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Delete {category.name}?</DialogTitle>
+                    <DialogTitle>Delete {category.label}?</DialogTitle>
 
                     <DialogDescription>
                         This category will be removed permanently. Sessions

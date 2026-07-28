@@ -11,17 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('meditations', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('category_id')
+        Schema::create('meditation_items', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->foreignUuid('category_id')
                 ->constrained('meditation_categories')
                 ->cascadeOnDelete();
             $table->string('title');
-            $table->text('description')->nullable();
+            $table->text('instructions')->nullable();
             $table->string('thumbnail')->nullable();
             $table->string('audio_url')->nullable();
             $table->string('video_url')->nullable();
             $table->unsignedSmallInteger('duration_minutes');
+            $table->foreignUuid('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
 
             $table->unique(['category_id', 'title']);
@@ -35,6 +36,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('meditations');
+        Schema::dropIfExists('meditation_items');
     }
 };

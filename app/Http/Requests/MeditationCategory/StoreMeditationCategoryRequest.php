@@ -5,6 +5,7 @@ namespace App\Http\Requests\MeditationCategory;
 use App\Concerns\MeditationCategoryValidationRules;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Str;
 
 class StoreMeditationCategoryRequest extends FormRequest
 {
@@ -20,11 +21,16 @@ class StoreMeditationCategoryRequest extends FormRequest
 
     /**
      * Prepare the data for validation.
+     *
+     * The slug is never typed by hand; it always follows the label.
      */
     protected function prepareForValidation(): void
     {
+        $label = trim((string) $this->input('label'));
+
         $this->merge([
-            'name' => trim((string) $this->input('name')),
+            'label' => $label,
+            'slug' => Str::slug($label),
         ]);
     }
 

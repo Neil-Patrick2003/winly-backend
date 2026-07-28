@@ -106,7 +106,7 @@ export default function MeditationCategoryIndex({
                             <TableHeader>
                                 <TableRow className="border-border hover:bg-transparent">
                                     <SortableHeader
-                                        column="name"
+                                        column="label"
                                         label="Category"
                                         sort={filters.sort}
                                         direction={filters.direction}
@@ -150,7 +150,7 @@ export default function MeditationCategoryIndex({
                                                     </span>
 
                                                     <span className="font-medium">
-                                                        {category.name}
+                                                        {category.label}
                                                     </span>
                                                 </div>
                                             </TableCell>
@@ -178,7 +178,7 @@ export default function MeditationCategoryIndex({
                                                         onClick={() =>
                                                             openEdit(category)
                                                         }
-                                                        aria-label={`Edit ${category.name}`}
+                                                        aria-label={`Edit ${category.label}`}
                                                         data-test={`edit-category-${category.id}`}
                                                     >
                                                         <Pencil className="size-4" />

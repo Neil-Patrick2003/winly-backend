@@ -1,8 +1,19 @@
 export type User = {
-    id: number;
-    name: string;
+    id: string;
+    full_name: string;
+    username: string | null;
     email: string;
-    avatar?: string;
+    avatar_url?: string | null;
+    cover_gradient?: string | null;
+    bio?: string | null;
+    streak_days: number;
+    longest_streak: number;
+    followers_count: number;
+    following_count: number;
+    wins_count: number;
+    is_private: boolean;
+    is_admin: boolean;
+    last_active_at: string | null;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
     created_at: string;

@@ -2,15 +2,15 @@
 
 namespace Database\Seeders;
 
-use App\Models\Meditation;
 use App\Models\MeditationCategory;
+use App\Models\MeditationItem;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 class MeditationSeeder extends Seeder
 {
     /**
-     * Session titles and lengths, keyed by category name.
+     * Session titles and lengths, keyed by category label.
      *
      * @var array<string, list<array{title: string, duration_minutes: int}>>
      */
@@ -52,10 +52,10 @@ class MeditationSeeder extends Seeder
      */
     public function run(): void
     {
-        $categories = MeditationCategory::query()->pluck('id', 'name');
+        $categories = MeditationCategory::query()->pluck('id', 'label');
 
-        foreach ($this->meditations as $categoryName => $sessions) {
-            $categoryId = $categories[$categoryName] ?? null;
+        foreach ($this->meditations as $categoryLabel => $sessions) {
+            $categoryId = $categories[$categoryLabel] ?? null;
 
             if ($categoryId === null) {
                 continue;
@@ -64,10 +64,10 @@ class MeditationSeeder extends Seeder
             foreach ($sessions as $session) {
                 $slug = Str::slug($session['title']);
 
-                Meditation::updateOrCreate(
+                MeditationItem::updateOrCreate(
                     ['category_id' => $categoryId, 'title' => $session['title']],
                     [
-                        'description' => null,
+                        'instructions' => null,
                         'thumbnail' => "thumbnails/{$slug}.jpg",
                         'audio_url' => "https://cdn.winly.test/audio/{$slug}.mp3",
                         'duration_minutes' => $session['duration_minutes'],
