@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\FollowController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\ProgressController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
 use App\Http\Resources\Api\V1\UserResource;
@@ -52,6 +53,9 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
 
         Route::delete('stories/{story}', [StoryController::class, 'destroy'])
             ->name('stories.destroy');
+
+        Route::get('progress/week', [ProgressController::class, 'week'])
+            ->name('progress.week');
 
         Route::get('posts', [PostController::class, 'index'])
             ->name('posts.index');
