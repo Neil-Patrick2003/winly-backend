@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Policies\StoryPolicy;
 use Database\Factories\StoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read User $user
  */
 #[Fillable(['user_id', 'image_url', 'caption', 'expires_at'])]
+#[UsePolicy(StoryPolicy::class)]
 class Story extends Model
 {
     /** @use HasFactory<StoryFactory> */

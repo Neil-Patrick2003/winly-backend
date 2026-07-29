@@ -15,7 +15,9 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('post_id')->unique()->constrained()->cascadeOnDelete();
             $table->text('learned_text');
-            $table->string('reference_source')->nullable();
+            // Wide enough for the 2048 the API accepts; the default 255 would
+            // pass validation and then fail on insert.
+            $table->string('reference_source', 2048)->nullable();
             $table->boolean('media_attached')->default(false);
             $table->timestamp('completed_at');
             $table->timestamps();

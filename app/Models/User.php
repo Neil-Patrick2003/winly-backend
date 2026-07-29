@@ -6,6 +6,8 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -31,6 +33,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $cover_gradient
  * @property int $streak_days
  * @property int $longest_streak
+ * @property Carbon|null $last_win_on
  * @property int $followers_count
  * @property int $following_count
  * @property int $wins_count
@@ -99,6 +102,7 @@ class User extends Authenticatable implements PasskeyUser
             'password_hash' => 'hashed',
             'streak_days' => 'integer',
             'longest_streak' => 'integer',
+            'last_win_on' => 'date',
             'followers_count' => 'integer',
             'following_count' => 'integer',
             'wins_count' => 'integer',
@@ -211,6 +215,36 @@ class User extends Authenticatable implements PasskeyUser
     public function habitLogs(): HasMany
     {
         return $this->hasMany(HabitLog::class);
+    }
+
+    /**
+     * Load the active-story flag onto this user.
+     *
+     * The scope answers the question for a query; this answers it for a model
+     * already in hand, such as the signed-in user.
+     */
+    public function loadActiveStory(): static
+    {
+        return $this->loadExists([
+            'stories as has_active_story' => fn (Builder $stories) => $stories->active(),
+        ]);
+    }
+
+    /**
+     * Flag whether the user has a story still running.
+     *
+     * A subquery rather than a loaded relation: the answer is one boolean per
+     * user, and pulling the stories themselves back to count them would drag
+     * every image URL of every author into a feed that never shows them.
+     *
+     * @param  Builder<User>  $query
+     */
+    #[Scope]
+    protected function withActiveStory(Builder $query): void
+    {
+        $query->withExists([
+            'stories as has_active_story' => fn (Builder $stories) => $stories->active(),
+        ]);
     }
 
     /**

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('stories', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
-            $table->string('image_url');
+            $table->string('image_url', 2048);
             $table->string('caption')->nullable();
             $table->timestamp('expires_at');
             $table->timestamps();

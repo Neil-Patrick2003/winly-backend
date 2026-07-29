@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasWinMedia;
 use Database\Factories\WinMovementFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -13,7 +14,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property string $id
  * @property string $post_id
- * @property string $movement_type
+ * @property string|null $movement_type
  * @property bool $media_attached
  * @property Carbon $completed_at
  * @property Carbon|null $created_at
@@ -24,7 +25,7 @@ use Illuminate\Support\Carbon;
 class WinMovement extends Model
 {
     /** @use HasFactory<WinMovementFactory> */
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, HasWinMedia;
 
     /**
      * The table associated with the model.
@@ -32,13 +33,6 @@ class WinMovement extends Model
      * @var string
      */
     protected $table = 'win_movement';
-
-    /**
-     * The movement types the clients offer.
-     *
-     * @var list<string>
-     */
-    public const TYPES = ['walk', 'run', 'cycle', 'swim', 'gym', 'yoga', 'stretch', 'other'];
 
     /**
      * The model's default attribute values.

@@ -6,8 +6,6 @@ use App\Models\CommunityMembership;
 use App\Models\Follow;
 use App\Models\Habit;
 use App\Models\HabitLog;
-use App\Models\MeditationCategory;
-use App\Models\MeditationItem;
 use App\Models\Notification;
 use App\Models\Post;
 use App\Models\PostLike;
@@ -43,8 +41,6 @@ test('every model is keyed by a uuid', function (string $model) {
     Habit::class,
     HabitLog::class,
     Notification::class,
-    MeditationCategory::class,
-    MeditationItem::class,
 ]);
 
 test('following is directional', function () {
@@ -101,14 +97,14 @@ test('a post carries exactly one kind of win', function () {
     expect($movementPost->winMovement->movement_type)->toBe('run');
 });
 
-test('a meditation win can point at a library session or stand alone', function () {
-    $item = MeditationItem::factory()->create();
+test('a meditation win records the timer and whether it was seen through', function () {
+    $finished = WinMeditation::factory()->create(['duration_minutes' => 20]);
+    $bailed = WinMeditation::factory()->cutShort()->create(['duration_minutes' => 3]);
 
-    $guided = WinMeditation::factory()->create(['meditation_item_id' => $item->id]);
-    $unguided = WinMeditation::factory()->unguided()->create();
-
-    expect($guided->meditationItem->is($item))->toBeTrue();
-    expect($unguided->meditation_item_id)->toBeNull();
+    expect($finished->duration_minutes)->toBe(20);
+    expect($finished->completed)->toBeTrue();
+    expect($bailed->duration_minutes)->toBe(3);
+    expect($bailed->completed)->toBeFalse();
 });
 
 test('a user can only like a post once', function () {
@@ -245,17 +241,4 @@ test('a notification survives its actor and post going away', function () {
         ->not->toBeNull()
         ->actor_id->toBeNull()
         ->post_id->toBeNull();
-});
-
-test('a meditation item renders its duration for the clients', function () {
-    $item = MeditationItem::factory()->create(['duration_minutes' => 22]);
-
-    expect($item->duration)->toBe('22 min');
-});
-
-test('a category keeps a slug alongside its label', function () {
-    $category = MeditationCategory::factory()->create(['label' => 'Deep Sleep', 'slug' => 'deep-sleep']);
-
-    expect($category->slug)->toBe('deep-sleep');
-    expect($category->meditationItems()->count())->toBe(0);
 });

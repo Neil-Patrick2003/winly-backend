@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasWinMedia;
 use Database\Factories\WinMeditationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -11,21 +12,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
+ * A meditation win: how long the timer ran, and whether it was seen through.
+ *
  * @property string $id
  * @property string $post_id
- * @property string|null $meditation_item_id
+ * @property int $duration_minutes
+ * @property bool $completed
  * @property bool $media_attached
  * @property Carbon $completed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Post $post
- * @property-read MeditationItem|null $meditationItem
  */
-#[Fillable(['post_id', 'meditation_item_id', 'media_attached', 'completed_at'])]
+#[Fillable(['post_id', 'duration_minutes', 'completed', 'media_attached', 'completed_at'])]
 class WinMeditation extends Model
 {
     /** @use HasFactory<WinMeditationFactory> */
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, HasWinMedia;
 
     /**
      * The table associated with the model.
@@ -35,11 +38,17 @@ class WinMeditation extends Model
     protected $table = 'win_meditation';
 
     /**
+     * The longest sitting the timer will accept, in minutes.
+     */
+    public const MAX_DURATION_MINUTES = 600;
+
+    /**
      * The model's default attribute values.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
+        'completed' => false,
         'media_attached' => false,
     ];
 
@@ -51,6 +60,8 @@ class WinMeditation extends Model
     protected function casts(): array
     {
         return [
+            'duration_minutes' => 'integer',
+            'completed' => 'boolean',
             'media_attached' => 'boolean',
             'completed_at' => 'datetime',
         ];
@@ -64,15 +75,5 @@ class WinMeditation extends Model
     public function post(): BelongsTo
     {
         return $this->belongsTo(Post::class);
-    }
-
-    /**
-     * The session that was completed, when it came from the library.
-     *
-     * @return BelongsTo<MeditationItem, $this>
-     */
-    public function meditationItem(): BelongsTo
-    {
-        return $this->belongsTo(MeditationItem::class);
     }
 }

@@ -33,6 +33,10 @@ class UserResource extends JsonResource
             'wins_count' => $this->wins_count,
             'is_private' => $this->is_private,
             'is_admin' => $this->is_admin,
+            'has_active_story' => $this->whenHas(
+                'has_active_story',
+                fn (mixed $value): bool => (bool) $value,
+            ),
             'last_active_at' => $this->last_active_at?->toIso8601String(),
             'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),

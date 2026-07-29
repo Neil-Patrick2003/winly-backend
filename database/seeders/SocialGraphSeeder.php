@@ -8,7 +8,6 @@ use App\Models\CommunityMembership;
 use App\Models\Follow;
 use App\Models\Habit;
 use App\Models\HabitLog;
-use App\Models\MeditationItem;
 use App\Models\Notification;
 use App\Models\Post;
 use App\Models\PostLike;
@@ -131,25 +130,44 @@ class SocialGraphSeeder extends Seeder
     }
 
     /**
-     * Give every user one win of each kind.
+     * Give every user one post of each kind, plus one that carries all three.
      *
      * @param  Collection<int, User>  $users
      * @return Collection<int, Post>
      */
     protected function seedWins(Collection $users): Collection
     {
-        $meditationItems = MeditationItem::query()->inRandomOrder()->limit(10)->get();
-
         $posts = collect();
 
         foreach ($users as $user) {
+            $combinedPost = Post::factory()->by($user)->create([
+                'caption' => 'Got all three in before lunch.',
+            ]);
+
+            WinMeditation::factory()->create([
+                'post_id' => $combinedPost->id,
+                'duration_minutes' => 10,
+                'completed_at' => now()->subHours(2),
+            ]);
+
+            WinLearning::factory()->create([
+                'post_id' => $combinedPost->id,
+                'completed_at' => now()->subHours(2),
+            ]);
+
+            WinMovement::factory()->create([
+                'post_id' => $combinedPost->id,
+                'movement_type' => 'walk',
+                'completed_at' => now()->subHours(2),
+            ]);
+
             $meditationPost = Post::factory()->by($user)->create([
                 'caption' => 'Sat with it for a bit this morning.',
             ]);
 
             WinMeditation::factory()->create([
                 'post_id' => $meditationPost->id,
-                'meditation_item_id' => $meditationItems->isEmpty() ? null : $meditationItems->random()->id,
+                'duration_minutes' => fake()->randomElement([5, 10, 15, 20]),
                 'completed_at' => now()->subHours(3),
             ]);
 
@@ -162,18 +180,36 @@ class SocialGraphSeeder extends Seeder
                 'completed_at' => now()->subHours(6),
             ]);
 
-            $movementPost = Post::factory()->by($user)->withImage()->create([
+            $movementPost = Post::factory()->by($user)->create([
                 'caption' => 'Got the body moving before the inbox did.',
             ]);
 
-            WinMovement::factory()->create([
+            $movementWin = WinMovement::factory()->create([
                 'post_id' => $movementPost->id,
+                'media_attached' => true,
                 'completed_at' => now()->subHours(9),
             ]);
 
-            $posts = $posts->concat([$meditationPost, $learningPost, $movementPost]);
+            // A photo and a clip, to exercise a win carrying several files.
+            $movementWin->media()->createMany([
+                [
+                    'post_id' => $movementPost->id,
+                    'url' => 'https://cdn.winly.test/media/'.fake()->unique()->slug(3).'.jpg',
+                    'kind' => 'image',
+                    'position' => 0,
+                ],
+                [
+                    'post_id' => $movementPost->id,
+                    'url' => 'https://cdn.winly.test/media/'.fake()->unique()->slug(3).'.mp4',
+                    'kind' => 'video',
+                    'position' => 1,
+                ],
+            ]);
 
-            $user->forceFill(['wins_count' => $user->posts()->count()])->save();
+            $posts = $posts->concat([$combinedPost, $meditationPost, $learningPost, $movementPost]);
+
+            // wins_count counts wins, not posts: the combined post holds three.
+            $user->forceFill(['wins_count' => 6])->save();
         }
 
         return $posts;

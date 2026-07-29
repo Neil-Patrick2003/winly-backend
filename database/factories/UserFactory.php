@@ -83,7 +83,7 @@ class UserFactory extends Factory
     }
 
     /**
-     * Indicate that the user administers the meditation library.
+     * Indicate that the user has administrator rights.
      */
     public function admin(): static
     {

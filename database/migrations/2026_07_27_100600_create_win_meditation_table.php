@@ -14,15 +14,11 @@ return new class extends Migration
         Schema::create('win_meditation', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('post_id')->unique()->constrained()->cascadeOnDelete();
-            $table->foreignUuid('meditation_item_id')
-                ->nullable()
-                ->constrained('meditation_items')
-                ->nullOnDelete();
+            $table->unsignedSmallInteger('duration_minutes');
+            $table->boolean('completed')->default(false);
             $table->boolean('media_attached')->default(false);
             $table->timestamp('completed_at');
             $table->timestamps();
-
-            $table->index('meditation_item_id');
         });
     }
 

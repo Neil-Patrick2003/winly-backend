@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasWinMedia;
 use Database\Factories\WinLearningFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -25,7 +26,7 @@ use Illuminate\Support\Carbon;
 class WinLearning extends Model
 {
     /** @use HasFactory<WinLearningFactory> */
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, HasWinMedia;
 
     /**
      * The table associated with the model.

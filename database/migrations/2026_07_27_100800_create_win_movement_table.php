@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('win_movement', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('post_id')->unique()->constrained()->cascadeOnDelete();
-            $table->string('movement_type');
+            $table->string('movement_type')->nullable();
             $table->boolean('media_attached')->default(false);
             $table->timestamp('completed_at');
             $table->timestamps();

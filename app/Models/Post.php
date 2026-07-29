@@ -23,7 +23,6 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $user_id
  * @property string|null $caption
- * @property string|null $image_url
  * @property int $likes_count
  * @property int $comments_count
  * @property int $shares_count
@@ -31,11 +30,18 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read User $user
  */
-#[Fillable(['user_id', 'caption', 'image_url', 'likes_count', 'comments_count', 'shares_count'])]
+#[Fillable(['user_id', 'caption', 'likes_count', 'comments_count', 'shares_count'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
     use HasFactory, HasUuids;
+
+    /**
+     * The kinds of win a post may record, one table each.
+     *
+     * @var list<string>
+     */
+    public const WIN_TYPES = ['meditation', 'learning', 'movement'];
 
     /**
      * The model's default attribute values.
@@ -80,6 +86,20 @@ class Post extends Model
     public function likes(): HasMany
     {
         return $this->hasMany(PostLike::class);
+    }
+
+    /**
+     * The reaction the user reading the feed left on this post, if any.
+     *
+     * Unconstrained this is simply the first like on the post, so it is only
+     * meaningful when eager loaded against a single user. The unique index on
+     * (post_id, user_id) guarantees there is at most one to find.
+     *
+     * @return HasOne<PostLike, $this>
+     */
+    public function viewerLike(): HasOne
+    {
+        return $this->hasOne(PostLike::class);
     }
 
     /**
@@ -137,11 +157,14 @@ class Post extends Model
     /**
      * Order posts newest first.
      *
+     * The id breaks ties on created_at. Cursor pagination needs a total order
+     * or posts sharing a timestamp can be repeated or skipped across pages.
+     *
      * @param  Builder<Post>  $query
      */
     #[Scope]
     protected function latestFirst(Builder $query): void
     {
-        $query->orderByDesc('created_at');
+        $query->orderByDesc('created_at')->orderByDesc('id');
     }
 }

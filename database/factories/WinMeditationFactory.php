@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\MeditationItem;
 use App\Models\Post;
 use App\Models\WinMeditation;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -21,19 +20,20 @@ class WinMeditationFactory extends Factory
     {
         return [
             'post_id' => Post::factory(),
-            'meditation_item_id' => MeditationItem::factory(),
+            'duration_minutes' => fake()->numberBetween(3, 45),
+            'completed' => true,
             'media_attached' => false,
             'completed_at' => now(),
         ];
     }
 
     /**
-     * Indicate that the session was not one from the library.
+     * Indicate that the timer was stopped before it finished.
      */
-    public function unguided(): static
+    public function cutShort(): static
     {
         return $this->state(fn (array $attributes) => [
-            'meditation_item_id' => null,
+            'completed' => false,
         ]);
     }
 

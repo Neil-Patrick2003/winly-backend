@@ -24,8 +24,6 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
-            MeditationCategorySeeder::class,
-            MeditationSeeder::class,
             SocialGraphSeeder::class,
         ]);
     }

@@ -1,14 +1,5 @@
 import { Link } from '@inertiajs/react';
-import {
-    AudioLines,
-    BookOpen,
-    FolderGit2,
-    LayoutGrid,
-    Settings2,
-    Sparkles,
-} from 'lucide-react';
-import { index as meditationCategories } from '@/actions/App/Http/Controllers/MeditationCategoryController';
-import { index as meditations } from '@/actions/App/Http/Controllers/MeditationController';
+import { BookOpen, FolderGit2, LayoutGrid, Settings2 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -34,21 +25,6 @@ const navGroups: NavGroup[] = [
                 title: 'Dashboard',
                 href: dashboard(),
                 icon: LayoutGrid,
-            },
-        ],
-    },
-    {
-        label: 'Content library',
-        items: [
-            {
-                title: 'Meditations',
-                href: meditations(),
-                icon: AudioLines,
-            },
-            {
-                title: 'Categories',
-                href: meditationCategories(),
-                icon: Sparkles,
             },
         ],
     },

@@ -21,21 +21,10 @@ class PostFactory extends Factory
         return [
             'user_id' => User::factory(),
             'caption' => fake()->sentence(10),
-            'image_url' => null,
             'likes_count' => 0,
             'comments_count' => 0,
             'shares_count' => 0,
         ];
-    }
-
-    /**
-     * Indicate that the post carries a photo.
-     */
-    public function withImage(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'image_url' => 'https://cdn.winly.test/posts/'.fake()->unique()->slug(3).'.jpg',
-        ]);
     }
 
     /**
