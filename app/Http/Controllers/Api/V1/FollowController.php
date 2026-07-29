@@ -68,6 +68,7 @@ class FollowController extends Controller
                 'follows.id as follow_id',
             ])
             ->withActiveStory()
+            ->withUnseenStory($viewer)
             ->with(['followers' => fn (Relation $query) => $query->whereKey($viewer->getKey())])
             ->orderByDesc('followed_at')
             ->orderByDesc('follow_id')

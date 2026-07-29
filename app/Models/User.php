@@ -218,6 +218,34 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * The streak the user is actually on right now.
+     *
+     * `streak_days` only moves when a win is posted, so a user who last showed
+     * up a week ago still carries the number they stopped at. Reading the
+     * column straight would tell them they are on a seven day streak they in
+     * fact broke; this reports what is still standing.
+     *
+     * A win yesterday still counts: the day is not missed until it is over, so
+     * the streak survives until a whole day passes with nothing on it.
+     *
+     * @param  Carbon|null  $on  The day to judge from, defaulting to today.
+     */
+    public function currentStreak(?Carbon $on = null): int
+    {
+        $lastWin = $this->last_win_on?->copy()->startOfDay();
+
+        if ($lastWin === null) {
+            return 0;
+        }
+
+        $yesterday = ($on ?? Carbon::now())->copy()->startOfDay()->subDay();
+
+        return $lastWin->greaterThanOrEqualTo($yesterday)
+            ? $this->streak_days
+            : 0;
+    }
+
+    /**
      * Load the active-story flag onto this user.
      *
      * The scope answers the question for a query; this answers it for a model
@@ -244,6 +272,31 @@ class User extends Authenticatable implements PasskeyUser
     {
         $query->withExists([
             'stories as has_active_story' => fn (Builder $stories) => $stories->active(),
+        ]);
+    }
+
+    /**
+     * Flag whether the user has a story the reader has not watched yet.
+     *
+     * What decides the colour of the ring around an avatar: something new is
+     * worth drawing brightly, and a run already watched through is worth
+     * showing as still there but spent. Needs to know who is asking, since the
+     * answer is different for every reader — unlike `withActiveStory`, which is
+     * the same for everyone.
+     *
+     * @param  Builder<User>  $query
+     * @param  User  $reader  The person the ring is being drawn for.
+     */
+    #[Scope]
+    protected function withUnseenStory(Builder $query, User $reader): void
+    {
+        $query->withExists([
+            'stories as has_unseen_story' => fn (Builder $stories) => $stories
+                ->active()
+                ->whereDoesntHave(
+                    'views',
+                    fn (Builder $views) => $views->where('viewer_id', $reader->getKey()),
+                ),
         ]);
     }
 

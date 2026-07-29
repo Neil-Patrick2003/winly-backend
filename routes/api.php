@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\FollowController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\PostLikeController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\StoryController;
+use App\Http\Controllers\Api\V1\StoryReactionController;
 use App\Http\Resources\Api\V1\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -26,9 +28,27 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('user', fn (Request $request) => new UserResource($request->user()->loadActiveStory()))
             ->name('user');
 
+        Route::get('stories', [StoryController::class, 'index'])
+            ->name('stories.index');
+
         Route::post('stories', [StoryController::class, 'store'])
             ->middleware('throttle:30,1')
             ->name('stories.store');
+
+        Route::post('stories/{story}/view', [StoryController::class, 'view'])
+            ->middleware('throttle:120,1')
+            ->name('stories.view');
+
+        Route::get('stories/{story}/views', [StoryController::class, 'viewers'])
+            ->name('stories.viewers');
+
+        Route::put('stories/{story}/reaction', [StoryReactionController::class, 'store'])
+            ->middleware('throttle:120,1')
+            ->name('stories.react');
+
+        Route::delete('stories/{story}/reaction', [StoryReactionController::class, 'destroy'])
+            ->middleware('throttle:120,1')
+            ->name('stories.unreact');
 
         Route::delete('stories/{story}', [StoryController::class, 'destroy'])
             ->name('stories.destroy');
@@ -42,6 +62,16 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::post('posts', [PostController::class, 'store'])
             ->middleware('throttle:30,1')
             ->name('posts.store');
+
+        Route::get('profile', [ProfileController::class, 'me'])
+            ->name('profile.show');
+
+        Route::patch('profile', [ProfileController::class, 'update'])
+            ->middleware('throttle:30,1')
+            ->name('profile.update');
+
+        Route::get('users/{user}', [ProfileController::class, 'show'])
+            ->name('users.show');
 
         Route::get('users/{user}/following', [FollowController::class, 'following'])
             ->name('users.following');

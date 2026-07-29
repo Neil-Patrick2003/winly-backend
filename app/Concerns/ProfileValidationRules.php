@@ -3,11 +3,22 @@
 namespace App\Concerns;
 
 use App\Models\User;
+use App\Models\WinMedia;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
 trait ProfileValidationRules
 {
+    /**
+     * The longest bio a profile carries.
+     */
+    public const MAX_BIO_LENGTH = 500;
+
+    /**
+     * The longest cover gradient name accepted.
+     */
+    public const MAX_COVER_GRADIENT_LENGTH = 50;
+
     /**
      * Get the validation rules used to validate user profiles.
      *
@@ -47,6 +58,50 @@ trait ProfileValidationRules
             $userId === null
                 ? Rule::unique(User::class)
                 : Rule::unique(User::class)->ignore($userId),
+        ];
+    }
+
+    /**
+     * Get the validation rules used to validate user bios.
+     *
+     * Nullable rather than required: clearing a bio is a thing people do, and
+     * an empty one is a valid profile.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function bioRules(): array
+    {
+        return ['nullable', 'string', 'max:'.self::MAX_BIO_LENGTH];
+    }
+
+    /**
+     * Get the validation rules used to validate profile cover gradients.
+     *
+     * The value is a name the clients pick from their own palette, not a
+     * colour, so this checks the shape and leaves the list to them.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function coverGradientRules(): array
+    {
+        return ['nullable', 'string', 'max:'.self::MAX_COVER_GRADIENT_LENGTH];
+    }
+
+    /**
+     * Get the validation rules used to validate an uploaded avatar photo.
+     *
+     * Photos only, and the same formats a story accepts, so a client that can
+     * already send one can send the other.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function avatarRules(): array
+    {
+        return [
+            'nullable',
+            'file',
+            'mimetypes:'.implode(',', WinMedia::IMAGE_MIMES),
+            'max:'.WinMedia::MAX_IMAGE_KB,
         ];
     }
 

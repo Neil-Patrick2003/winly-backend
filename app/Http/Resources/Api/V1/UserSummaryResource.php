@@ -52,6 +52,17 @@ class UserSummaryResource extends JsonResource
                 'has_active_story',
                 fn (mixed $value): bool => (bool) $value,
             ),
+            /*
+             * Whether any of those stories is still unwatched by the reader.
+             *
+             * Selected by the `withUnseenStory` scope, and what separates a
+             * bright ring from a spent one. Absent where the caller did not
+             * ask, for the same reason as the two above.
+             */
+            'has_unseen_story' => $this->whenHas(
+                'has_unseen_story',
+                fn (mixed $value): bool => (bool) $value,
+            ),
         ];
     }
 }

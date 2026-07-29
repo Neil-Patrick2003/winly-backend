@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -77,6 +78,35 @@ class Story extends Model
     public function reactions(): HasMany
     {
         return $this->hasMany(StoryReaction::class);
+    }
+
+    /**
+     * The reader's own view of this story, if they have seen it.
+     *
+     * Unconstrained this is simply the first view on the story, so it is only
+     * meaningful when eager loaded against a single user. The unique index on
+     * (story_id, viewer_id) guarantees there is at most one to find.
+     *
+     * @return HasOne<StoryView, $this>
+     */
+    public function viewerView(): HasOne
+    {
+        return $this->hasOne(StoryView::class, 'story_id');
+    }
+
+    /**
+     * The reader's own reaction to this story, if they left one.
+     *
+     * Unconstrained this is simply the first reaction on the story, so it is
+     * only meaningful when eager loaded against a single user — the same
+     * bargain as `viewerView`. The unique index on (story_id, user_id)
+     * guarantees there is at most one to find.
+     *
+     * @return HasOne<StoryReaction, $this>
+     */
+    public function viewerReaction(): HasOne
+    {
+        return $this->hasOne(StoryReaction::class, 'story_id');
     }
 
     /**
