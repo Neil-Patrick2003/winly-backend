@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use Database\Factories\CommunityMembershipFactory;
+use Database\Factories\CircleMembershipFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,17 +13,17 @@ use Illuminate\Support\Carbon;
 /**
  * @property string $id
  * @property string $user_id
- * @property string $community_id
+ * @property string $circle_id
  * @property Carbon $joined_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
- * @property-read Community $community
+ * @property-read Circle $circle
  */
-#[Fillable(['user_id', 'community_id', 'joined_at'])]
-class CommunityMembership extends Model
+#[Fillable(['user_id', 'circle_id', 'joined_at'])]
+class CircleMembership extends Model
 {
-    /** @use HasFactory<CommunityMembershipFactory> */
+    /** @use HasFactory<CircleMembershipFactory> */
     use HasFactory, HasUuids;
 
     /**
@@ -49,12 +49,12 @@ class CommunityMembership extends Model
     }
 
     /**
-     * The community joined.
+     * The circle joined.
      *
-     * @return BelongsTo<Community, $this>
+     * @return BelongsTo<Circle, $this>
      */
-    public function community(): BelongsTo
+    public function circle(): BelongsTo
     {
-        return $this->belongsTo(Community::class);
+        return $this->belongsTo(Circle::class);
     }
 }

@@ -1,8 +1,8 @@
 <?php
 
+use App\Models\Circle;
+use App\Models\CircleMembership;
 use App\Models\Comment;
-use App\Models\Community;
-use App\Models\CommunityMembership;
 use App\Models\Follow;
 use App\Models\Habit;
 use App\Models\HabitLog;
@@ -26,8 +26,8 @@ test('every model is keyed by a uuid', function (string $model) {
     expect(Str::isUuid($record->getKey()))->toBeTrue();
 })->with([
     User::class,
-    Community::class,
-    CommunityMembership::class,
+    Circle::class,
+    CircleMembership::class,
     Follow::class,
     Post::class,
     PostLike::class,
@@ -63,21 +63,21 @@ test('a user cannot follow the same person twice', function () {
     Follow::factory()->from($neil)->to($ada)->create();
 })->throws(UniqueConstraintViolationException::class);
 
-test('joining a community is recorded once per user', function () {
+test('joining a circle is recorded once per user', function () {
     $user = User::factory()->create();
-    $community = Community::factory()->create();
+    $circle = Circle::factory()->create();
 
-    CommunityMembership::factory()->create([
+    CircleMembership::factory()->create([
         'user_id' => $user->id,
-        'community_id' => $community->id,
+        'circle_id' => $circle->id,
     ]);
 
-    expect($user->communities()->pluck('communities.id')->all())->toBe([$community->id]);
-    expect($community->members()->pluck('users.id')->all())->toBe([$user->id]);
+    expect($user->circles()->pluck('circles.id')->all())->toBe([$circle->id]);
+    expect($circle->members()->pluck('users.id')->all())->toBe([$user->id]);
 
-    CommunityMembership::factory()->create([
+    CircleMembership::factory()->create([
         'user_id' => $user->id,
-        'community_id' => $community->id,
+        'circle_id' => $circle->id,
     ]);
 })->throws(UniqueConstraintViolationException::class);
 

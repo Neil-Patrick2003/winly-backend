@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexPostRequest;
 use App\Http\Requests\Api\V1\StorePostRequest;
 use App\Http\Resources\Api\V1\PostResource;
+use App\Models\Circle;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinMedia;
@@ -18,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
@@ -63,7 +65,52 @@ class PostController extends Controller
             'viewerLike' => fn (Relation $query) => $query->whereBelongsTo($viewer),
             'user' => fn (Relation $query) => $query->withActiveStory(),
             'user.followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
+            // One eager load for the whole page, so a feed of circle posts
+            // costs one query rather than one per post.
+            'circles',
         ];
+    }
+
+    /**
+     * The posts shared into one circle, newest first.
+     *
+     * A circle's own wall. Cursor paginated for the same reason the feed is:
+     * it grows from the top, and an offset page would repeat or skip posts as
+     * new ones land between one request and the next.
+     *
+     * @return AnonymousResourceCollection<int, PostResource>
+     */
+    public function circle(IndexPostRequest $request, Circle $circle): AnonymousResourceCollection
+    {
+        Gate::authorize('view', $circle);
+
+        $posts = $circle->posts()
+            ->with($this->relationsFor($request->user()))
+            ->latestFirst()
+            ->cursorPaginate($request->perPage())
+            ->withQueryString();
+
+        return PostResource::collection($posts);
+    }
+
+    /**
+     * One person's own posts, newest first.
+     *
+     * What a profile shows. Nothing is narrowed: a circle is where a post is
+     * *placed*, not who it is kept from, so a profile lists everything its
+     * owner has shared.
+     *
+     * @return AnonymousResourceCollection<int, PostResource>
+     */
+    public function byUser(IndexPostRequest $request, User $user): AnonymousResourceCollection
+    {
+        $posts = $user->posts()
+            ->with($this->relationsFor($request->user()))
+            ->latestFirst()
+            ->cursorPaginate($request->perPage())
+            ->withQueryString();
+
+        return PostResource::collection($posts);
     }
 
     /**
@@ -91,8 +138,10 @@ class PostController extends Controller
      */
     public function index(IndexPostRequest $request): AnonymousResourceCollection
     {
+        $viewer = $request->user();
+
         $posts = Post::query()
-            ->with($this->relationsFor($request->user()))
+            ->with($this->relationsFor($viewer))
             ->latestFirst()
             ->cursorPaginate($request->perPage())
             ->withQueryString();
@@ -116,6 +165,17 @@ class PostController extends Controller
             $user = $request->user();
 
             $post = $user->posts()->create($request->safe()->only(['caption']));
+
+            /*
+             * One post, attached to every circle it was shared with. Attaching
+             * rather than duplicating is what keeps a win shared with ten
+             * circles one thing — one comment thread, one set of likes, and one
+             * row in anybody's feed.
+             */
+            $circleIds = $request->validated('circle_ids') ?? [];
+            if ($circleIds !== []) {
+                $post->circles()->sync($circleIds);
+            }
 
             $wins = $request->validated('wins');
 

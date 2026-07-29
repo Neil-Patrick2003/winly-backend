@@ -2,14 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Models\Community;
+use App\Models\Circle;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
- * @extends Factory<Community>
+ * @extends Factory<Circle>
  */
-class CommunityFactory extends Factory
+class CircleFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -18,7 +19,10 @@ class CommunityFactory extends Factory
      */
     public function definition(): array
     {
-        $name = Str::title(fake()->unique()->words(2, true));
+        // Wrapped before joining: the generator is typed as returning either a
+        // list of words or one string, and `Arr::wrap` handles both without
+        // asserting which came back.
+        $name = Str::title(implode(' ', Arr::wrap(fake()->unique()->words(2))));
 
         return [
             'name' => $name,

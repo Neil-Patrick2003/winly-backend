@@ -42,7 +42,7 @@ class Notification extends Model
      *
      * @var list<string>
      */
-    public const TYPES = ['follow', 'like', 'comment', 'mention', 'streak', 'community'];
+    public const TYPES = ['follow', 'like', 'comment', 'mention', 'streak', 'circle'];
 
     /**
      * The model's default attribute values.

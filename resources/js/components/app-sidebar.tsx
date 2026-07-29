@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid, Settings2 } from 'lucide-react';
+import { BookOpen, FolderGit2, LayoutGrid, Settings2, Users } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,6 +14,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as circlesIndex } from '@/routes/circles';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavGroup, NavItem } from '@/types';
 
@@ -25,6 +26,11 @@ const navGroups: NavGroup[] = [
                 title: 'Dashboard',
                 href: dashboard(),
                 icon: LayoutGrid,
+            },
+            {
+                title: 'My Circles',
+                href: circlesIndex(),
+                icon: Users,
             },
         ],
     },

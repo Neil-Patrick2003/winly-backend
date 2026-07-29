@@ -166,25 +166,45 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
-     * The communities this user has joined.
+     * The circles this user has joined.
      *
-     * @return BelongsToMany<Community, $this>
+     * @return BelongsToMany<Circle, $this>
      */
-    public function communities(): BelongsToMany
+    public function circles(): BelongsToMany
     {
-        return $this->belongsToMany(Community::class, 'community_memberships')
+        return $this->belongsToMany(Circle::class, 'circle_memberships')
             ->withPivot('joined_at')
             ->withTimestamps();
     }
 
     /**
-     * The membership rows tying this user to communities.
+     * The membership rows tying this user to circles.
      *
-     * @return HasMany<CommunityMembership, $this>
+     * @return HasMany<CircleMembership, $this>
      */
-    public function communityMemberships(): HasMany
+    public function circleMemberships(): HasMany
     {
-        return $this->hasMany(CommunityMembership::class);
+        return $this->hasMany(CircleMembership::class);
+    }
+
+    /**
+     * The circles this user made.
+     *
+     * @return HasMany<Circle, $this>
+     */
+    public function ownedCircles(): HasMany
+    {
+        return $this->hasMany(Circle::class, 'owner_id');
+    }
+
+    /**
+     * Circle invitations waiting on this user, or already answered by them.
+     *
+     * @return HasMany<CircleInvitation, $this>
+     */
+    public function circleInvitations(): HasMany
+    {
+        return $this->hasMany(CircleInvitation::class, 'invitee_id');
     }
 
     /**

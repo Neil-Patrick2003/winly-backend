@@ -19,6 +19,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read Story $story
  * @property-read User $viewer
+ *
+ * Selected alongside the row by `StoryController::viewers` — the reaction this
+ * viewer left on the same story, or null where they only watched. It is not a
+ * column on this table, so it is absent on a view fetched any other way.
+ * @property-read string|null $reaction_type
  */
 #[Fillable(['story_id', 'viewer_id', 'viewed_at'])]
 class StoryView extends Model

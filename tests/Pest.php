@@ -1,5 +1,9 @@
 <?php
 
+use App\Models\Circle;
+use App\Models\Follow;
+use App\Models\Post;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -47,4 +51,37 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Write a post and share it into a circle.
+ *
+ * A post reaches a circle through the `circle_post` pivot rather than a column
+ * on the post, so creating one takes two steps everywhere it is done.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function postInCircle(
+    Circle $circle,
+    User $author,
+    array $attributes = [],
+): Post {
+    $post = Post::factory()->create([
+        'user_id' => $author->id,
+        ...$attributes,
+    ]);
+
+    $circle->posts()->attach($post);
+
+    return $post;
+}
+
+/**
+ * Make a mutual follow — the app's definition of a friend, and what the circle
+ * invite pickers draw their candidates from.
+ */
+function befriend(User $a, User $b): void
+{
+    Follow::factory()->from($a)->to($b)->create();
+    Follow::factory()->from($b)->to($a)->create();
 }

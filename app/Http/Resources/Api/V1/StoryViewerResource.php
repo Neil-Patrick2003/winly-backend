@@ -33,7 +33,7 @@ class StoryViewerResource extends JsonResource
              * The two are the same today, but `viewed_at` is the fact being
              * recorded and `created_at` is bookkeeping about the record.
              */
-            'viewed_at' => $this->viewed_at?->toIso8601String(),
+            'viewed_at' => $this->viewed_at->toIso8601String(),
             /*
              * What they left on it, or null for the many who just watched.
              *

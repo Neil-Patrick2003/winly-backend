@@ -32,6 +32,9 @@ class UserResource extends JsonResource
             'longest_streak' => $this->longest_streak,
             'followers_count' => $this->followers_count,
             'following_count' => $this->following_count,
+            // Counted where the caller asked for it; see ProfileResource for
+            // why this is not the same figure as `wins_count`.
+            'posts_count' => $this->whenHas('posts_count', fn (mixed $value): int => (int) $value),
             'wins_count' => $this->wins_count,
             'is_private' => $this->is_private,
             'is_admin' => $this->is_admin,

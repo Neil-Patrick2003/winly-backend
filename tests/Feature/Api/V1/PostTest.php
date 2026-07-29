@@ -378,9 +378,14 @@ test('the feed runs the same number of queries however many posts it returns', f
     $many = $measure();
 
     // Eager loading means the cost is fixed: the post page, the authors, the
-    // three win tables and their files. Growing the page must not add queries.
+    // three win tables and their files, and the circles each post was shared
+    // into. Growing the page must not add queries.
+    //
+    // The budget is nine rather than eight because posts carry their circles
+    // now — one more eager load, not one more per post, which is what the
+    // equality above actually guards.
     expect($many)->toBe($few);
-    expect($few)->toBeLessThanOrEqual(8);
+    expect($few)->toBeLessThanOrEqual(9);
 });
 
 test('the feed is cursor paginated', function () {

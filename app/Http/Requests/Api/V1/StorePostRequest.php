@@ -35,6 +35,21 @@ class StorePostRequest extends FormRequest
         return [
             'caption' => ['nullable', 'string', 'max:2000'],
 
+            /*
+             * The circles to share into, or nothing to share with everybody.
+             *
+             * Each is narrowed to circles the caller is actually in: posting
+             * into a group you are not part of is not a thing to allow just
+             * because the id was guessable.
+             */
+            'circle_ids' => ['nullable', 'array', 'max:50'],
+            'circle_ids.*' => [
+                'uuid',
+                'distinct',
+                Rule::exists('circle_memberships', 'circle_id')
+                    ->where('user_id', $this->user()?->getKey()),
+            ],
+
             'wins' => ['required', 'array', 'min:1', 'max:'.count(Post::WIN_TYPES)],
             'wins.*.type' => ['required', 'string', Rule::in(Post::WIN_TYPES), 'distinct'],
             'wins.*.completed_at' => ['nullable', 'date', 'before_or_equal:now'],

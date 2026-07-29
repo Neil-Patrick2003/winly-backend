@@ -1,8 +1,12 @@
 <?php
 
 use App\Models\Follow;
+use App\Models\Post;
 use App\Models\Story;
 use App\Models\User;
+use App\Models\WinLearning;
+use App\Models\WinMeditation;
+use App\Models\WinMovement;
 use Laravel\Sanctum\Sanctum;
 
 beforeEach(function () {
@@ -205,4 +209,25 @@ test('a deleted user is a 404', function () {
     $this->other->delete();
 
     $this->getJson(route('api.v1.users.show', $this->other))->assertNotFound();
+});
+
+test('a profile counts posts and wins separately', function () {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user);
+
+    // One post carrying all three pillars: three wins, one post.
+    $post = Post::factory()->for($user)->create();
+    WinMeditation::factory()->for($post, 'post')->create();
+    WinLearning::factory()->for($post, 'post')->create();
+    WinMovement::factory()->for($post, 'post')->create();
+    $user->forceFill(['wins_count' => 3])->save();
+
+    $this->getJson(route('api.v1.users.show', $user))
+        ->assertOk()
+        ->assertJsonPath('data.posts_count', 1)
+        ->assertJsonPath('data.wins_count', 3);
+
+    $this->getJson(route('api.v1.user'))
+        ->assertOk()
+        ->assertJsonPath('data.posts_count', 1);
 });

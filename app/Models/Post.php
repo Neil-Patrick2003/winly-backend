@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
@@ -76,6 +77,33 @@ class Post extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The circles it was shared into. Empty means shared openly.
+     *
+     * @return BelongsToMany<Circle, $this>
+     */
+    public function circles(): BelongsToMany
+    {
+        return $this->belongsToMany(Circle::class)->withTimestamps();
+    }
+
+    /**
+     * Whether this reader is allowed to see the post at all.
+     *
+     * Always true: a circle is where a post is *placed*, not who it is kept
+     * from. Sharing into circles puts a win on their walls and takes nothing
+     * away from anybody else — there is no such thing as a post only a circle
+     * can read.
+     *
+     * Kept as a method rather than deleted because callers still ask, and
+     * because that stops being true the moment private circles land: this is
+     * the one place that would need to know.
+     */
+    public function isVisibleTo(User $reader): bool
+    {
+        return true;
     }
 
     /**
@@ -160,11 +188,19 @@ class Post extends Model
      * The id breaks ties on created_at. Cursor pagination needs a total order
      * or posts sharing a timestamp can be repeated or skipped across pages.
      *
+     * Both columns are qualified because this scope is applied to the circle
+     * relation as well as to the table on its own, and `circle_post` carries a
+     * `created_at` of its own. Left bare, MySQL rejects the query outright as
+     * ambiguous; SQLite quietly picks one, which is worse, since the tests
+     * would go on passing while production fell over.
+     *
      * @param  Builder<Post>  $query
      */
     #[Scope]
     protected function latestFirst(Builder $query): void
     {
-        $query->orderByDesc('created_at')->orderByDesc('id');
+        $query
+            ->orderByDesc($query->qualifyColumn('created_at'))
+            ->orderByDesc($query->qualifyColumn('id'));
     }
 }

@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Models\Circle;
+use App\Models\CircleMembership;
 use App\Models\Comment;
-use App\Models\Community;
-use App\Models\CommunityMembership;
 use App\Models\Follow;
 use App\Models\Habit;
 use App\Models\HabitLog;
@@ -46,7 +46,7 @@ class SocialGraphSeeder extends Seeder
         $users = $this->users();
 
         $this->seedFollows($users);
-        $this->seedCommunities($users);
+        $this->seedCircles($users);
 
         $posts = $this->seedWins($users);
 
@@ -102,30 +102,30 @@ class SocialGraphSeeder extends Seeder
     }
 
     /**
-     * Stand up a few communities and drop everyone into two of them.
+     * Stand up a few circles and drop everyone into two of them.
      *
      * @param  Collection<int, User>  $users
      */
-    protected function seedCommunities(Collection $users): void
+    protected function seedCircles(Collection $users): void
     {
-        $communities = Community::query()->count() > 0
-            ? Community::query()->get()
-            : Community::factory(4)->create();
+        $circles = Circle::query()->count() > 0
+            ? Circle::query()->get()
+            : Circle::factory(4)->create();
 
         foreach ($users as $index => $user) {
-            foreach ([$index % $communities->count(), ($index + 1) % $communities->count()] as $offset) {
-                CommunityMembership::firstOrCreate(
+            foreach ([$index % $circles->count(), ($index + 1) % $circles->count()] as $offset) {
+                CircleMembership::firstOrCreate(
                     [
                         'user_id' => $user->id,
-                        'community_id' => $communities[$offset]->id,
+                        'circle_id' => $circles[$offset]->id,
                     ],
                     ['joined_at' => now()->subDays($index)],
                 );
             }
         }
 
-        foreach ($communities as $community) {
-            $community->forceFill(['members_count' => $community->memberships()->count()])->save();
+        foreach ($circles as $circle) {
+            $circle->forceFill(['members_count' => $circle->memberships()->count()])->save();
         }
     }
 

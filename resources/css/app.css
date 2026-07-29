@@ -44,12 +44,17 @@
     --radius-card: 0.625rem;
     --radius-sheet: 0.875rem;
 
-    /* Hairline elevation. Surfaces are defined by their border, not their blur. */
+    /*
+     * Hairline elevation. Surfaces are defined by their border, not their blur.
+     *
+     * Cast in the indigo of the ink rather than a slate grey, so a shadow on a
+     * lilac-tinted ground reads as shade rather than as dirt.
+     */
     --shadow-card:
-        0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.03);
+        0 1px 2px rgba(44, 42, 58, 0.05), 0 1px 3px rgba(44, 42, 58, 0.04);
     --shadow-raised:
-        0 2px 4px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.05);
-    --shadow-float: 0 1px 2px rgba(15, 23, 42, 0.08);
+        0 2px 4px rgba(44, 42, 58, 0.06), 0 4px 12px rgba(44, 42, 58, 0.06);
+    --shadow-float: 0 1px 2px rgba(44, 42, 58, 0.09);
 
     /* Primary brand gradient. */
     --color-brand-green: #22c55e;
@@ -69,16 +74,22 @@
     --color-error: #ef4444;
     --color-info: #3b82f6;
 
-    /* Pillars. */
-    --color-meditation: #22c55e;
-    --color-meditation-bg: #dcfce7;
-    --color-meditation-icon: #16a34a;
-    --color-learning: #3b82f6;
-    --color-learning-bg: #dbeafe;
-    --color-learning-icon: #2563eb;
-    --color-movement: #f97316;
-    --color-movement-bg: #ffedd5;
-    --color-movement-icon: #ea580c;
+    /*
+     * Pillars. Each kind of win keeps one hue wherever it appears — the badge
+     * on a post, the column on the tracker — so people learn the colour once.
+     *
+     * The `-bg` tints are the pastel fills, the `-icon` tones the ink that sits
+     * on them, kept dark enough to read at caption size.
+     */
+    --color-meditation: #4fbf8b;
+    --color-meditation-bg: #dff5ea;
+    --color-meditation-icon: #1f7a55;
+    --color-learning: #6fa8f5;
+    --color-learning-bg: #e3eeff;
+    --color-learning-icon: #2f5fa8;
+    --color-movement: #f5a46f;
+    --color-movement-bg: #ffece0;
+    --color-movement-icon: #9c5528;
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -125,78 +136,114 @@
     --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* Light mode first. */
+/*
+ * Pastel, light mode first.
+ *
+ * Surfaces are tinted rather than grey — a wash of lilac through the neutrals
+ * so nothing reads as cold slate — and fills are pale with dark ink on top.
+ * That is what keeps a pastel palette legible: the colour carries the mood and
+ * the text carries the contrast, instead of pale text on a pale fill.
+ *
+ * Ink is a soft indigo rather than black. Pure black on a tinted ground reads
+ * as a hole punched in the page.
+ */
 :root {
-    --background: #f8fafc;
-    --foreground: #0f172a;
+    --background: #faf9fd;
+    --foreground: #2c2a3a;
     --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card-foreground: #2c2a3a;
     --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #22c55e;
-    --primary-foreground: #ffffff;
-    --secondary: #f1f5f9;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #dcfce7;
-    --accent-foreground: #16a34a;
-    --destructive: #ef4444;
+    --popover-foreground: #2c2a3a;
+
+    /*
+     * Mint fill, deep green ink: 7.4:1. The old vivid green carried white text
+     * at 2.3:1, well under the 4.5:1 normal text needs, so every primary button
+     * in the app was hard to read.
+     */
+    --primary: #a7e8cb;
+    --primary-foreground: #0b4a33;
+
+    --secondary: #f2effa;
+    --secondary-foreground: #3b3357;
+    --muted: #f4f2fa;
+    --muted-foreground: #6e6a85;
+    --accent: #e4edff;
+    --accent-foreground: #274a86;
+
+    /* Saturated enough to carry the white text the button variant sets. */
+    --destructive: #c74444;
     --destructive-foreground: #ffffff;
-    --border: #e2e8f0;
-    --divider: #cbd5e1;
-    --input: #e2e8f0;
-    --ring: #22c55e;
-    --chart-1: #22c55e;
-    --chart-2: #38bdf8;
-    --chart-3: #8b5cf6;
-    --chart-4: #f59e0b;
-    --chart-5: #fb7185;
+
+    --border: #e9e5f4;
+    --divider: #dcd6ec;
+    --input: #e2dcf1;
+
+    /* Deeper than the mint fill, so a focus ring is visible against it. */
+    --ring: #3e9e79;
+
+    --chart-1: #7fd8b4;
+    --chart-2: #9dc6f7;
+    --chart-3: #c4b1f0;
+    --chart-4: #f7cf9b;
+    --chart-5: #f5aec2;
+
     --radius: 0.5rem;
-    --sidebar: #ffffff;
-    --sidebar-foreground: #0f172a;
-    --sidebar-primary: #22c55e;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #f1f5f9;
-    --sidebar-accent-foreground: #0f172a;
-    --sidebar-border: #e2e8f0;
-    --sidebar-ring: #22c55e;
+
+    --sidebar: #f6f4fc;
+    --sidebar-foreground: #2c2a3a;
+    --sidebar-primary: #a7e8cb;
+    --sidebar-primary-foreground: #0b4a33;
+    --sidebar-accent: #eae5f8;
+    --sidebar-accent-foreground: #3b3357;
+    --sidebar-border: #e5e0f2;
+    --sidebar-ring: #3e9e79;
 }
 
+/*
+ * The same palette after dark: the tints hold, the ground drops to a deep
+ * plum-ink rather than a blue-black, and the pastels brighten just enough to
+ * stay pastel without glowing.
+ */
 .dark {
-    --background: #0b1220;
-    --foreground: #e2e8f0;
-    --card: #111b2e;
-    --card-foreground: #e2e8f0;
-    --popover: #111b2e;
-    --popover-foreground: #e2e8f0;
-    --primary: #22c55e;
-    --primary-foreground: #052e16;
-    --secondary: #1a2438;
-    --secondary-foreground: #e2e8f0;
-    --muted: #1a2438;
-    --muted-foreground: #94a3b8;
-    --accent: #14321f;
-    --accent-foreground: #4ade80;
-    --destructive: #f87171;
-    --destructive-foreground: #450a0a;
-    --border: #1e293b;
-    --divider: #334155;
-    --input: #1e293b;
-    --ring: #22c55e;
-    --chart-1: #4ade80;
-    --chart-2: #38bdf8;
-    --chart-3: #a78bfa;
-    --chart-4: #fbbf24;
-    --chart-5: #fb7185;
-    --sidebar: #0f1a2c;
-    --sidebar-foreground: #e2e8f0;
-    --sidebar-primary: #22c55e;
-    --sidebar-primary-foreground: #052e16;
-    --sidebar-accent: #1a2438;
-    --sidebar-accent-foreground: #e2e8f0;
-    --sidebar-border: #1e293b;
-    --sidebar-ring: #22c55e;
+    --background: #16141f;
+    --foreground: #e9e6f2;
+    --card: #1d1a29;
+    --card-foreground: #e9e6f2;
+    --popover: #1d1a29;
+    --popover-foreground: #e9e6f2;
+
+    --primary: #7fd8b4;
+    --primary-foreground: #06281c;
+
+    --secondary: #272335;
+    --secondary-foreground: #e9e6f2;
+    --muted: #262232;
+    --muted-foreground: #a49fb8;
+    --accent: #2a3048;
+    --accent-foreground: #bcd4ff;
+
+    --destructive: #c74e4e;
+    --destructive-foreground: #ffffff;
+
+    --border: #2e2a3c;
+    --divider: #3d3851;
+    --input: #322d42;
+    --ring: #7fd8b4;
+
+    --chart-1: #7fd8b4;
+    --chart-2: #9dc6f7;
+    --chart-3: #c4b1f0;
+    --chart-4: #f7cf9b;
+    --chart-5: #f5aec2;
+
+    --sidebar: #1a1725;
+    --sidebar-foreground: #e9e6f2;
+    --sidebar-primary: #7fd8b4;
+    --sidebar-primary-foreground: #06281c;
+    --sidebar-accent: #272335;
+    --sidebar-accent-foreground: #e9e6f2;
+    --sidebar-border: #2e2a3c;
+    --sidebar-ring: #7fd8b4;
 }
 
 @layer base {
@@ -235,8 +282,13 @@
     color: transparent;
 }
 
-/* Glassmorphism accent for floating panels. */
+/*
+ * Glassmorphism accent for floating panels.
+ *
+ * Mixed from the card token rather than hardcoded white, or the panel stays
+ * white after dark and burns a hole in the page.
+ */
 @utility glass-card {
-    background: rgba(255, 255, 255, 0.65);
+    background: color-mix(in oklab, var(--card) 72%, transparent);
     backdrop-filter: blur(20px);
 }

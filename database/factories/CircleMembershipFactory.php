@@ -2,15 +2,15 @@
 
 namespace Database\Factories;
 
-use App\Models\Community;
-use App\Models\CommunityMembership;
+use App\Models\Circle;
+use App\Models\CircleMembership;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<CommunityMembership>
+ * @extends Factory<CircleMembership>
  */
-class CommunityMembershipFactory extends Factory
+class CircleMembershipFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -21,7 +21,7 @@ class CommunityMembershipFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'community_id' => Community::factory(),
+            'circle_id' => Circle::factory(),
             'joined_at' => now(),
         ];
     }

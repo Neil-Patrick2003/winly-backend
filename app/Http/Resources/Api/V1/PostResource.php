@@ -28,6 +28,12 @@ class PostResource extends JsonResource
             'shares_count' => $this->shares_count,
             'created_at' => $this->created_at?->toIso8601String(),
             'author' => new UserSummaryResource($this->whenLoaded('user')),
+            /*
+             * The circles it was shared into, so a feed card can say where it
+             * came from. Empty on an openly shared post, which belongs nowhere
+             * in particular; absent where the caller never looked.
+             */
+            'circles' => CircleResource::collection($this->whenLoaded('circles')),
             'viewer_has_liked' => $this->relationLoaded('viewerLike')
                 ? $this->viewerLike !== null
                 : false,

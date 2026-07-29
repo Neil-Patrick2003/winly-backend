@@ -93,7 +93,7 @@ class ProfileController extends Controller
      */
     protected function profile(User $user, User $viewer): ProfileResource
     {
-        $user->loadActiveStory()->load([
+        $user->loadActiveStory()->loadCount('posts')->load([
             'followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
             'following' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
         ]);

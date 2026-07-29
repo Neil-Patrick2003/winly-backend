@@ -34,6 +34,12 @@ class ProfileResource extends JsonResource
             'bio' => $this->bio,
             'cover_gradient' => $this->cover_gradient,
 
+            /*
+             * How many times they have posted, and how many wins those posts
+             * carry — not the same number. One post logging meditation,
+             * learning and movement together moves `wins_count` by three.
+             */
+            'posts_count' => $this->whenHas('posts_count', fn (mixed $value): int => (int) $value),
             'wins_count' => $this->wins_count,
             'followers_count' => $this->followers_count,
             'following_count' => $this->following_count,
