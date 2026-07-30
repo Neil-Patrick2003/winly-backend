@@ -1,8 +1,17 @@
 import { Link, usePage } from '@inertiajs/react';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { AuthBrandPanel } from '@/components/auth-brand-panel';
 import { home } from '@/routes';
 import type { AuthLayoutProps } from '@/types';
 
+/**
+ * Sign-in, register and the rest of the auth screens.
+ *
+ * Two columns on a wide screen — the artwork on the left, the form on the
+ * right — collapsing to the form alone below `lg`. The panel is the first
+ * thing dropped rather than something to scroll past: on a phone the only
+ * thing anyone came here to do is sign in.
+ */
 export default function AuthSplitLayout({
     children,
     title,
@@ -11,31 +20,32 @@ export default function AuthSplitLayout({
     const { name } = usePage().props;
 
     return (
-        <div className="relative grid h-dvh flex-col items-center justify-center px-8 sm:px-0 lg:max-w-none lg:grid-cols-2 lg:px-0">
-            <div className="relative hidden h-full flex-col bg-muted p-10 text-white lg:flex dark:border-r">
-                <div className="absolute inset-0 bg-zinc-900" />
-                <Link
-                    href={home()}
-                    className="relative z-20 flex items-center text-lg font-medium"
-                >
-                    <AppLogoIcon className="mr-2 size-8 fill-current text-white" />
-                    {name}
-                </Link>
-            </div>
-            <div className="w-full lg:p-8">
-                <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+        <div className="grid min-h-dvh bg-background lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+            <AuthBrandPanel name={name} />
+
+            <div className="flex flex-col justify-center px-6 py-10 sm:px-10">
+                <div className="mx-auto w-full max-w-sm">
                     <Link
                         href={home()}
-                        className="relative z-20 flex items-center justify-center lg:hidden"
+                        className="mb-8 flex items-center justify-center gap-2.5 lg:hidden"
                     >
-                        <AppLogoIcon className="h-10 fill-current text-black sm:h-12" />
+                        <AppLogoIcon className="size-8 shrink-0" />
+                        <span className="font-display text-page-title font-semibold">
+                            {name}
+                        </span>
                     </Link>
-                    <div className="flex flex-col items-start gap-2 text-left sm:items-center sm:text-center">
-                        <h1 className="text-xl font-medium">{title}</h1>
-                        <p className="text-sm text-balance text-muted-foreground">
-                            {description}
-                        </p>
+
+                    <div className="mb-6 flex flex-col gap-1.5">
+                        <h1 className="font-display text-heading font-semibold text-balance">
+                            {title}
+                        </h1>
+                        {description && (
+                            <p className="text-section text-muted-foreground">
+                                {description}
+                            </p>
+                        )}
                     </div>
+
                     {children}
                 </div>
             </div>

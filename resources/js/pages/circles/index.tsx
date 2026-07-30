@@ -36,7 +36,7 @@ export default function CirclesIndex({
     const mounted = useRef(false);
 
     useEffect(() => {
-        if (! mounted.current) {
+        if (!mounted.current) {
             mounted.current = true;
 
             return;
@@ -44,7 +44,12 @@ export default function CirclesIndex({
 
         router.get(
             circlesIndex().url,
-            { filter: { state: filter, ...(settled ? { search: settled } : {}) } },
+            {
+                filter: {
+                    state: filter,
+                    ...(settled ? { search: settled } : {}),
+                },
+            },
             {
                 preserveState: true,
                 preserveScroll: true,
@@ -67,12 +72,12 @@ export default function CirclesIndex({
 
     return (
         <>
-            <Head title="Manage circles" />
+            <Head title="Create circle" />
 
             <Page width="wide">
                 <PageHeader
-                    title="Manage circles"
-                    description="Every group you are part of on Winly, in one place."
+                    title="Create circle"
+                    description="Start a circle and track how it grows. The sharing itself happens on the app."
                     action={
                         <>
                             <div className="relative">
@@ -83,7 +88,9 @@ export default function CirclesIndex({
                                 <Input
                                     type="search"
                                     value={term}
-                                    onChange={(event) => setTerm(event.target.value)}
+                                    onChange={(event) =>
+                                        setTerm(event.target.value)
+                                    }
                                     placeholder="Search circles…"
                                     aria-label="Search circles"
                                     className="h-10 w-56 rounded-full bg-card pl-10 shadow-card"
@@ -105,14 +112,16 @@ export default function CirclesIndex({
                         return (
                             <Link
                                 key={tab.key}
-                                href={circlesIndex({
-                                    query: {
-                                        filter: {
-                                            state: tab.key,
-                                            ...(search ? { search } : {}),
+                                href={
+                                    circlesIndex({
+                                        query: {
+                                            filter: {
+                                                state: tab.key,
+                                                ...(search ? { search } : {}),
+                                            },
                                         },
-                                    },
-                                }).url}
+                                    }).url
+                                }
                                 preserveScroll
                                 aria-current={isActive ? 'page' : undefined}
                                 className={cn(
@@ -157,7 +166,9 @@ export default function CirclesIndex({
                                       : 'Circles move between Active and Quiet on their own, as people share.'
                             }
                             action={
-                                filter === 'all' && !search ? createButton : undefined
+                                filter === 'all' && !search
+                                    ? createButton
+                                    : undefined
                             }
                         />
                     ) : (
