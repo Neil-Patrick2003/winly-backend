@@ -76,6 +76,10 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('circles/{circle}', [CircleController::class, 'show'])
             ->name('circles.show');
 
+        Route::patch('circles/{circle}', [CircleController::class, 'update'])
+            ->middleware('throttle:60,1')
+            ->name('circles.update');
+
         Route::delete('circles/{circle}', [CircleController::class, 'destroy'])
             ->name('circles.destroy');
 

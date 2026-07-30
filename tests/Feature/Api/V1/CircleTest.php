@@ -129,6 +129,100 @@ test('joining twice counts once, and leaving puts the count back', function () {
         ->assertJsonPath('data.members_count', 0);
 });
 
+test('the owner can rename a circle and say again what it is for', function () {
+    $circle = Circle::factory()->create([
+        'owner_id' => $this->user->id,
+        'name' => 'Runners',
+        'icon_initial' => 'R',
+        'description' => 'Before the sun is up.',
+        'tag' => 'fitness',
+    ]);
+    $colour = $circle->color_hex;
+
+    $this->patchJson(route('api.v1.circles.update', $circle), [
+        'name' => 'Morning Walkers',
+        'description' => 'Once the sun is up, then.',
+        'tag' => 'walking',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.name', 'Morning Walkers')
+        ->assertJsonPath('data.description', 'Once the sun is up, then.')
+        ->assertJsonPath('data.tag', 'walking')
+        // The badge letter follows the name...
+        ->assertJsonPath('data.icon_initial', 'M')
+        // ...and the colour does not: the circle is still the one people know.
+        ->assertJsonPath('data.color_hex', $colour)
+        ->assertJsonPath('data.is_owner', true);
+});
+
+test('a field left out of the change is left alone, and a null clears it', function () {
+    $circle = Circle::factory()->create([
+        'owner_id' => $this->user->id,
+        'description' => 'Before the sun is up.',
+        'tag' => 'fitness',
+    ]);
+
+    $this->patchJson(route('api.v1.circles.update', $circle), ['name' => 'Still Runners'])
+        ->assertOk()
+        ->assertJsonPath('data.description', 'Before the sun is up.')
+        ->assertJsonPath('data.tag', 'fitness');
+
+    $this->patchJson(route('api.v1.circles.update', $circle), [
+        'name' => 'Still Runners',
+        'description' => null,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.description', null)
+        ->assertJsonPath('data.tag', 'fitness');
+});
+
+test('a circle may keep the name it already has', function () {
+    $circle = Circle::factory()->create(['owner_id' => $this->user->id, 'name' => 'Readers']);
+
+    $this->patchJson(route('api.v1.circles.update', $circle), [
+        'name' => 'Readers',
+        'description' => 'Whatever is on the pile.',
+    ])->assertOk();
+});
+
+test('a rename cannot take a name another circle is using', function () {
+    Circle::factory()->create(['name' => 'Readers']);
+    $mine = Circle::factory()->create(['owner_id' => $this->user->id, 'name' => 'Runners']);
+
+    $this->patchJson(route('api.v1.circles.update', $mine), ['name' => 'Readers'])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('name');
+
+    expect($mine->refresh()->name)->toBe('Runners');
+});
+
+test('a circle cannot be turned private on the way through', function () {
+    $circle = Circle::factory()->create(['owner_id' => $this->user->id]);
+
+    $this->patchJson(route('api.v1.circles.update', $circle), [
+        'name' => 'Inner Ring',
+        'is_private' => true,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('is_private');
+
+    expect($circle->refresh()->is_private)->toBeFalse();
+});
+
+test('only the owner can change a circle, members included', function () {
+    $theirs = Circle::factory()->create(['name' => 'Theirs']);
+    CircleMembership::create([
+        'user_id' => $this->user->id,
+        'circle_id' => $theirs->id,
+        'joined_at' => now(),
+    ]);
+
+    $this->patchJson(route('api.v1.circles.update', $theirs), ['name' => 'Mine Now'])
+        ->assertForbidden();
+
+    expect($theirs->refresh()->name)->toBe('Theirs');
+});
+
 test('only the owner can take a circle down', function () {
     $theirs = Circle::factory()->create();
 

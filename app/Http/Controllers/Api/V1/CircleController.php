@@ -8,6 +8,7 @@ use App\Actions\Circles\RemoveCircleMember;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexCircleRequest;
 use App\Http\Requests\Api\V1\StoreCircleRequest;
+use App\Http\Requests\Api\V1\UpdateCircleRequest;
 use App\Http\Resources\Api\V1\CircleMemberResource;
 use App\Http\Resources\Api\V1\CircleResource;
 use App\Http\Resources\Api\V1\UserSummaryResource;
@@ -26,18 +27,6 @@ use Illuminate\Validation\ValidationException;
 
 class CircleController extends Controller
 {
-    /**
-     * The colours a new circle's badge is drawn from.
-     *
-     * Picked from the name rather than asked for: naming a circle is the whole
-     * of what someone came to do, and a colour picker in front of that is a
-     * decision nobody wanted. The same name always lands on the same colour, so
-     * it does not appear to change when the list reloads.
-     *
-     * @var list<string>
-     */
-    protected const PALETTE = ['#946FF0', '#609BF1', '#60BC88', '#E6AC49', '#E0759C', '#4FB6C4'];
-
     /**
      * The circles this person is in — the ones they made and the ones they
      * joined, newest first.
@@ -107,6 +96,56 @@ class CircleController extends Controller
         Gate::authorize('view', $circle);
 
         $viewer = $request->user();
+
+        $circle->setAttribute(
+            'is_member',
+            $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
+        );
+
+        return (new CircleResource($circle->load('owner')->loadCount('posts')))->response();
+    }
+
+    /**
+     * Change a circle's name, what it is for, or the tag it carries.
+     *
+     * The owner's alone, like taking it down: the description is what the
+     * circle tells everyone it is, and a group any member could rewrite is one
+     * that says something different every week.
+     *
+     * Answers with the whole circle rather than the fields that moved, so the
+     * screen behind the form can take the response as it stands instead of
+     * reloading to find out what it now says.
+     */
+    public function update(UpdateCircleRequest $request, Circle $circle): JsonResponse
+    {
+        Gate::authorize('update', $circle);
+
+        $viewer = $request->user();
+        $attributes = $request->validated();
+
+        $name = trim($attributes['name']);
+        $circle->name = $name;
+
+        /*
+         * The badge letter follows the name; the colour does not.
+         *
+         * A circle showing an initial its name no longer has is plainly wrong,
+         * so that is re-derived. The colour is how the circle is picked out of
+         * a list at a glance — it was chosen from the name only because nobody
+         * wanted a colour picker, not so it would follow one — and repainting
+         * the banner for a rename would read as a different circle.
+         */
+        $circle->icon_initial = Str::upper(Str::substr($name, 0, 1));
+
+        // Only what was actually sent: absent is "leave it", and a null is the
+        // way to clear one. See `UpdateCircleRequest`.
+        foreach (['description', 'tag'] as $field) {
+            if (array_key_exists($field, $attributes)) {
+                $circle->{$field} = $attributes[$field];
+            }
+        }
+
+        $circle->save();
 
         $circle->setAttribute(
             'is_member',
@@ -302,15 +341,5 @@ class CircleController extends Controller
                 'members_count' => $circle->members_count,
             ],
         ]);
-    }
-
-    /**
-     * A stable colour for a name.
-     */
-    protected function colourFor(string $name): string
-    {
-        $index = abs(crc32(Str::lower($name))) % count(self::PALETTE);
-
-        return self::PALETTE[$index];
     }
 }
