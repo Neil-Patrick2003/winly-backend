@@ -61,12 +61,26 @@
     --color-brand-blue: #38bdf8;
     --color-brand-violet: #8b5cf6;
 
-    /* Secondary palette: cards, illustrations, badges, backgrounds. */
-    --color-mint: #bbf7d0;
-    --color-lavender: #e9d5ff;
-    --color-baby-blue: #dbeafe;
-    --color-peach: #fde68a;
-    --color-soft-pink: #fbcfe8;
+    /*
+     * The pastels a circle is drawn in: the wash across the top of its card and
+     * the chip that names its tag.
+     *
+     * Paired — a `-tint` to fill and an `-ink` dark enough to read on it — so a
+     * chip is one hue rather than two guesses. Which pair a circle gets is
+     * decided from its name, so it keeps the same colour everywhere.
+     */
+    --color-wash-blue: #dce7f7;
+    --color-wash-blue-ink: #35578c;
+    --color-wash-lavender: #e6e1f6;
+    --color-wash-lavender-ink: #55458c;
+    --color-wash-pink: #fbe1e6;
+    --color-wash-pink-ink: #8f4257;
+    --color-wash-peach: #fdebd3;
+    --color-wash-peach-ink: #8a5620;
+    --color-wash-mint: #e0efe5;
+    --color-wash-mint-ink: #2a6e49;
+    --color-wash-butter: #f7efd0;
+    --color-wash-butter-ink: #7a611f;
 
     /* Semantic. */
     --color-success: #22c55e;
@@ -148,55 +162,54 @@
  * as a hole punched in the page.
  */
 :root {
-    --background: #faf9fd;
-    --foreground: #2c2a3a;
+    /* A warm off-white canvas; the white of the cards is what lifts them off it. */
+    --background: #f6f7f3;
+    --foreground: #16181d;
     --card: #ffffff;
-    --card-foreground: #2c2a3a;
+    --card-foreground: #16181d;
     --popover: #ffffff;
-    --popover-foreground: #2c2a3a;
+    --popover-foreground: #16181d;
 
     /*
-     * Mint fill, deep green ink: 7.4:1. The old vivid green carried white text
-     * at 2.3:1, well under the 4.5:1 normal text needs, so every primary button
-     * in the app was hard to read.
+     * Deep green, white ink: 5.4:1. Pastel is the canvas and the trimmings —
+     * the one action a screen is for stays solid, or nothing on the page leads.
      */
-    --primary: #a7e8cb;
-    --primary-foreground: #0b4a33;
+    --primary: #2f7d52;
+    --primary-foreground: #ffffff;
 
-    --secondary: #f2effa;
-    --secondary-foreground: #3b3357;
-    --muted: #f4f2fa;
-    --muted-foreground: #6e6a85;
-    --accent: #e4edff;
-    --accent-foreground: #274a86;
+    --secondary: #eef0ea;
+    --secondary-foreground: #2f3238;
+    --muted: #f1f2ee;
+    --muted-foreground: #6e7278;
 
-    /* Saturated enough to carry the white text the button variant sets. */
-    --destructive: #c74444;
+    /* The pale mint a selected nav row sits on. */
+    --accent: #e9f4ec;
+    --accent-foreground: #2a6e49;
+
+    --destructive: #c0483f;
     --destructive-foreground: #ffffff;
 
-    --border: #e9e5f4;
-    --divider: #dcd6ec;
-    --input: #e2dcf1;
+    --border: #e7e9e2;
+    --divider: #dfe1d9;
+    --input: #dfe1d9;
+    --ring: #2f7d52;
 
-    /* Deeper than the mint fill, so a focus ring is visible against it. */
-    --ring: #3e9e79;
-
-    --chart-1: #7fd8b4;
-    --chart-2: #9dc6f7;
-    --chart-3: #c4b1f0;
-    --chart-4: #f7cf9b;
-    --chart-5: #f5aec2;
+    --chart-1: #7fbf9b;
+    --chart-2: #9db9e4;
+    --chart-3: #b3a6dd;
+    --chart-4: #edc493;
+    --chart-5: #e8a5b0;
 
     --radius: 0.5rem;
 
-    --sidebar: #f6f4fc;
-    --sidebar-foreground: #2c2a3a;
-    --sidebar-primary: #a7e8cb;
-    --sidebar-primary-foreground: #0b4a33;
-    --sidebar-accent: #eae5f8;
-    --sidebar-accent-foreground: #3b3357;
-    --sidebar-border: #e5e0f2;
-    --sidebar-ring: #3e9e79;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #16181d;
+    --sidebar-primary: #2f7d52;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e9f4ec;
+    --sidebar-accent-foreground: #2a6e49;
+    --sidebar-border: #ecede8;
+    --sidebar-ring: #2f7d52;
 }
 
 /*
@@ -204,46 +217,51 @@
  * plum-ink rather than a blue-black, and the pastels brighten just enough to
  * stay pastel without glowing.
  */
+/*
+ * The same room after dark. The canvas keeps its warmth as a deep olive-ink
+ * rather than turning blue, and the green lifts to carry dark text, since a
+ * forest green on a near-black ground is a hole rather than a button.
+ */
 .dark {
-    --background: #16141f;
-    --foreground: #e9e6f2;
-    --card: #1d1a29;
-    --card-foreground: #e9e6f2;
-    --popover: #1d1a29;
-    --popover-foreground: #e9e6f2;
+    --background: #14161a;
+    --foreground: #e8eae4;
+    --card: #1c1f23;
+    --card-foreground: #e8eae4;
+    --popover: #1c1f23;
+    --popover-foreground: #e8eae4;
 
-    --primary: #7fd8b4;
-    --primary-foreground: #06281c;
+    --primary: #7fc79b;
+    --primary-foreground: #08301d;
 
-    --secondary: #272335;
-    --secondary-foreground: #e9e6f2;
-    --muted: #262232;
-    --muted-foreground: #a49fb8;
-    --accent: #2a3048;
-    --accent-foreground: #bcd4ff;
+    --secondary: #262a2f;
+    --secondary-foreground: #e8eae4;
+    --muted: #24282c;
+    --muted-foreground: #9ba299;
+    --accent: #1e3226;
+    --accent-foreground: #97d7b0;
 
-    --destructive: #c74e4e;
+    --destructive: #d16158;
     --destructive-foreground: #ffffff;
 
-    --border: #2e2a3c;
-    --divider: #3d3851;
-    --input: #322d42;
-    --ring: #7fd8b4;
+    --border: #2c3035;
+    --divider: #3a3f45;
+    --input: #30353a;
+    --ring: #7fc79b;
 
-    --chart-1: #7fd8b4;
-    --chart-2: #9dc6f7;
-    --chart-3: #c4b1f0;
-    --chart-4: #f7cf9b;
-    --chart-5: #f5aec2;
+    --chart-1: #7fbf9b;
+    --chart-2: #9db9e4;
+    --chart-3: #b3a6dd;
+    --chart-4: #edc493;
+    --chart-5: #e8a5b0;
 
-    --sidebar: #1a1725;
-    --sidebar-foreground: #e9e6f2;
-    --sidebar-primary: #7fd8b4;
-    --sidebar-primary-foreground: #06281c;
-    --sidebar-accent: #272335;
-    --sidebar-accent-foreground: #e9e6f2;
-    --sidebar-border: #2e2a3c;
-    --sidebar-ring: #7fd8b4;
+    --sidebar: #1a1d21;
+    --sidebar-foreground: #e8eae4;
+    --sidebar-primary: #7fc79b;
+    --sidebar-primary-foreground: #08301d;
+    --sidebar-accent: #1e3226;
+    --sidebar-accent-foreground: #97d7b0;
+    --sidebar-border: #2c3035;
+    --sidebar-ring: #7fc79b;
 }
 
 @layer base {

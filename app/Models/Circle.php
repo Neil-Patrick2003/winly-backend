@@ -128,7 +128,11 @@ class Circle extends Model
     }
 
     /**
-     * Match circles whose name or description contains the given term.
+     * Match circles whose name, tag or description contains the given term.
+     *
+     * The tag is searched alongside the prose because it is the word people
+     * reach for first — someone looking for "fitness" means the tag, and a
+     * search that only read the name would tell them no such circle exists.
      *
      * @param  Builder<Circle>  $query
      */
@@ -140,6 +144,7 @@ class Circle extends Model
 
             $query->where(function (Builder $query) use ($term): void {
                 $query->where('name', 'like', $term)
+                    ->orWhere('tag', 'like', $term)
                     ->orWhere('description', 'like', $term);
             });
         });

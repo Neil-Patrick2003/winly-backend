@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\RecordNotification;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexCommentRequest;
 use App\Http\Requests\Api\V1\StoreCommentRequest;
@@ -47,8 +48,11 @@ class CommentController extends Controller
     /**
      * Leave a comment on a post.
      */
-    public function store(StoreCommentRequest $request, Post $post): JsonResponse
-    {
+    public function store(
+        StoreCommentRequest $request,
+        Post $post,
+        RecordNotification $notify,
+    ): JsonResponse {
         $comment = DB::transaction(function () use ($request, $post): Comment {
             $comment = $post->comments()->create([
                 'user_id' => $request->user()->id,
@@ -59,6 +63,8 @@ class CommentController extends Controller
 
             return $comment;
         });
+
+        $notify->comment($post->user, $request->user(), $post);
 
         $comment->setRelation('user', $request->user());
 

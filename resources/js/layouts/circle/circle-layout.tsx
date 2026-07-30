@@ -2,11 +2,18 @@ import { Link } from '@inertiajs/react';
 import { Settings2 } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { CircleBadge } from '@/components/circle-badge';
+import { Page, PageHeader } from '@/components/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn } from '@/lib/utils';
-import { manage, members, posts, tracker } from '@/routes/circles';
+import {
+    index as circlesIndex,
+    manage,
+    members,
+    posts,
+    tracker,
+} from '@/routes/circles';
 import type { CircleHeader } from '@/types';
 
 /**
@@ -29,47 +36,46 @@ export default function CircleLayout({
     ];
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
-            <header className="flex flex-wrap items-start gap-4">
-                <CircleBadge
-                    initial={circle.icon_initial}
-                    color={circle.color_hex}
-                    size="lg"
-                />
+        <Page width="wide">
+            <PageHeader
+                title={circle.name}
+                description={circle.description ?? undefined}
+                back={{ href: circlesIndex(), label: 'All circles' }}
+                leading={
+                    <CircleBadge
+                        initial={circle.icon_initial}
+                        color={circle.color_hex}
+                        size="lg"
+                    />
+                }
+                action={
+                    circle.can_manage && (
+                        <Button variant="outline" asChild>
+                            <Link href={manage(circle.id)} prefetch>
+                                <Settings2 className="size-4" />
+                                Manage
+                            </Link>
+                        </Button>
+                    )
+                }
+            />
 
-                <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="truncate text-xl font-semibold tracking-tight">
-                            {circle.name}
-                        </h1>
-                        {circle.tag && <Badge variant="secondary">{circle.tag}</Badge>}
-                    </div>
-
-                    {circle.description && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            {circle.description}
-                        </p>
-                    )}
-
-                    <p className="mt-1 text-caption text-muted-foreground tabular-nums">
-                        {circle.members_count}{' '}
-                        {circle.members_count === 1 ? 'member' : 'members'}
-                    </p>
-                </div>
-
-                {circle.can_manage && (
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={manage(circle.id)} prefetch>
-                            <Settings2 className="size-4" />
-                            Manage
-                        </Link>
-                    </Button>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted-foreground tabular-nums">
+                <span>
+                    {circle.members_count}{' '}
+                    {circle.members_count === 1 ? 'member' : 'members'}
+                </span>
+                {circle.tag && (
+                    <>
+                        <span aria-hidden>·</span>
+                        <Badge variant="secondary">{circle.tag}</Badge>
+                    </>
                 )}
-            </header>
+            </div>
 
             <nav
                 aria-label="Circle sections"
-                className="mt-6 flex gap-1 rounded-lg bg-muted p-1"
+                className="mt-6 flex gap-6 border-b border-border"
             >
                 {tabs.map((tab) => {
                     const isActive = isCurrentUrl(tab.href);
@@ -81,11 +87,11 @@ export default function CircleLayout({
                             prefetch
                             aria-current={isActive ? 'page' : undefined}
                             className={cn(
-                                'flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium transition-colors',
+                                '-mb-px border-b-2 pb-3 text-sm font-medium transition-colors',
                                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                                 isActive
-                                    ? 'bg-background text-foreground shadow-float'
-                                    : 'text-muted-foreground hover:text-foreground',
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground',
                             )}
                         >
                             {tab.title}
@@ -95,6 +101,6 @@ export default function CircleLayout({
             </nav>
 
             <div className="mt-6">{children}</div>
-        </div>
+        </Page>
     );
 }

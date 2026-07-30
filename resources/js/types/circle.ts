@@ -14,11 +14,26 @@ export type CircleHeader = CircleSummary & {
     members_count: number;
 };
 
+/** The pastels a circle's card can be washed in. */
+export type CircleWash =
+    | 'blue'
+    | 'lavender'
+    | 'pink'
+    | 'peach'
+    | 'mint'
+    | 'butter';
+
 /** A circle as the My Circles list shows it. */
 export type CircleListing = CircleHeader & {
+    wash: CircleWash;
     posts_count: number;
+    /** Somebody has shared into it in the last week. */
+    is_active: boolean;
     joined_at: string;
+    faces: { id: string; full_name: string; avatar_url: string | null }[];
 };
+
+export type CircleFilter = 'all' | 'active' | 'quiet';
 
 export type CircleMember = {
     id: string;

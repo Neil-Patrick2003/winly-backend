@@ -1,100 +1,176 @@
-import { Head, Link } from '@inertiajs/react';
-import { Settings2, Users } from 'lucide-react';
-import { CircleBadge } from '@/components/circle-badge';
+import { Head, Link, router } from '@inertiajs/react';
+import { Plus, Search, Users } from 'lucide-react';
+import { CircleCard } from '@/components/circle-card';
+import { CreateCircleDialog } from '@/components/create-circle-dialog';
 import { EmptyState } from '@/components/empty-state';
-import Heading from '@/components/heading';
-import { Badge } from '@/components/ui/badge';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
-import { manage, members } from '@/routes/circles';
-import type { CircleListing } from '@/types';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { useEffect, useRef, useState } from 'react';
+import { index as circlesIndex } from '@/routes/circles';
+import type { CircleFilter, CircleListing } from '@/types';
 
-export default function CirclesIndex({ circles }: { circles: CircleListing[] }) {
+const tabs: { key: CircleFilter; label: string }[] = [
+    { key: 'all', label: 'All circles' },
+    { key: 'active', label: 'Active' },
+    { key: 'quiet', label: 'Quiet' },
+];
+
+export default function CirclesIndex({
+    circles,
+    filter,
+    search,
+    counts,
+}: {
+    circles: CircleListing[];
+    filter: CircleFilter;
+    search: string | null;
+    counts: Record<CircleFilter, number>;
+}) {
+    const [term, setTerm] = useState(search ?? '');
+    const settled = useDebouncedValue(term);
+    // The first render is the server's own answer; asking for it again the
+    // moment the page mounts would be a wasted round trip.
+    const mounted = useRef(false);
+
+    useEffect(() => {
+        if (! mounted.current) {
+            mounted.current = true;
+
+            return;
+        }
+
+        router.get(
+            circlesIndex().url,
+            { filter: { state: filter, ...(settled ? { search: settled } : {}) } },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['circles', 'search', 'counts'],
+            },
+        );
+    }, [settled, filter]);
+
+    const createButton = (
+        <CreateCircleDialog
+            trigger={
+                <Button className="h-10 rounded-full px-5">
+                    <Plus className="size-4" />
+                    Create circle
+                </Button>
+            }
+        />
+    );
+
     return (
         <>
-            <Head title="My Circles" />
+            <Head title="Manage circles" />
 
-            <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
-                <Heading
-                    title="My Circles"
-                    description="The circles you have joined. Open one to see its members, posts and tracker."
+            <Page width="wide">
+                <PageHeader
+                    title="Manage circles"
+                    description="Every group you are part of on Winly, in one place."
+                    action={
+                        <>
+                            <div className="relative">
+                                <Search
+                                    className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground"
+                                    aria-hidden
+                                />
+                                <Input
+                                    type="search"
+                                    value={term}
+                                    onChange={(event) => setTerm(event.target.value)}
+                                    placeholder="Search circles…"
+                                    aria-label="Search circles"
+                                    className="h-10 w-56 rounded-full bg-card pl-10 shadow-card"
+                                />
+                            </div>
+
+                            {createButton}
+                        </>
+                    }
                 />
 
-                {circles.length === 0 ? (
-                    <EmptyState
-                        icon={Users}
-                        title="You have not joined a circle yet"
-                        description="Circles you join from the app will show up here, with everything shared into them."
-                    />
-                ) : (
-                    <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {circles.map((circle) => (
-                            <li key={circle.id}>
-                                <article className="group flex h-full flex-col gap-3 rounded-card border border-border p-4 shadow-card transition-shadow hover:shadow-raised">
-                                    <div className="flex items-start gap-3">
-                                        <CircleBadge
-                                            initial={circle.icon_initial}
-                                            color={circle.color_hex}
-                                        />
+                <nav
+                    aria-label="Filter circles"
+                    className="mt-8 flex gap-6 border-b border-border"
+                >
+                    {tabs.map((tab) => {
+                        const isActive = tab.key === filter;
 
-                                        <div className="min-w-0 flex-1">
-                                            <h2 className="truncate text-card-title font-medium">
-                                                <Link
-                                                    href={members(circle.id)}
-                                                    prefetch
-                                                    className="rounded-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                                >
-                                                    {circle.name}
-                                                </Link>
-                                            </h2>
-
-                                            {circle.tag && (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="mt-1"
-                                                >
-                                                    {circle.tag}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {circle.description && (
-                                        <p className="line-clamp-2 text-sm text-muted-foreground">
-                                            {circle.description}
-                                        </p>
+                        return (
+                            <Link
+                                key={tab.key}
+                                href={circlesIndex({
+                                    query: {
+                                        filter: {
+                                            state: tab.key,
+                                            ...(search ? { search } : {}),
+                                        },
+                                    },
+                                }).url}
+                                preserveScroll
+                                aria-current={isActive ? 'page' : undefined}
+                                className={cn(
+                                    '-mb-px flex items-center gap-1.5 border-b-2 pb-3 text-sm font-medium transition-colors',
+                                    isActive
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                {tab.label}
+                                <span
+                                    className={cn(
+                                        'tabular-nums',
+                                        isActive
+                                            ? 'text-primary'
+                                            : 'text-muted-foreground/70',
                                     )}
+                                >
+                                    {counts[tab.key]}
+                                </span>
+                            </Link>
+                        );
+                    })}
+                </nav>
 
-                                    <p className="text-caption text-muted-foreground tabular-nums">
-                                        {circle.members_count}{' '}
-                                        {circle.members_count === 1
-                                            ? 'member'
-                                            : 'members'}{' '}
-                                        · {circle.posts_count}{' '}
-                                        {circle.posts_count === 1 ? 'post' : 'posts'}
-                                    </p>
-
-                                    <div className="mt-auto flex flex-wrap gap-2 pt-2">
-                                        <Button variant="outline" size="sm" asChild>
-                                            <Link href={members(circle.id)} prefetch>
-                                                Open
-                                            </Link>
-                                        </Button>
-
-                                        {circle.can_manage && (
-                                            <Button variant="ghost" size="sm" asChild>
-                                                <Link href={manage(circle.id)} prefetch>
-                                                    <Settings2 className="size-4" />
-                                                    Manage
-                                                </Link>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </article>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
+                <div className="mt-6">
+                    {circles.length === 0 ? (
+                        <EmptyState
+                            icon={Users}
+                            title={
+                                search
+                                    ? 'Nothing matches that'
+                                    : filter === 'all'
+                                      ? 'You have not joined a circle yet'
+                                      : `No ${filter} circles`
+                            }
+                            description={
+                                search
+                                    ? 'Try a different word, or clear the search to see everything.'
+                                    : filter === 'all'
+                                      ? 'Start one and it will show up here, with everything shared into it.'
+                                      : 'Circles move between Active and Quiet on their own, as people share.'
+                            }
+                            action={
+                                filter === 'all' && !search ? createButton : undefined
+                            }
+                        />
+                    ) : (
+                        <ul className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                            {circles.map((circle) => (
+                                <li key={circle.id}>
+                                    <CircleCard circle={circle} />
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+            </Page>
         </>
     );
 }

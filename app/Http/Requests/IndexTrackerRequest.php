@@ -5,25 +5,13 @@ namespace App\Http\Requests;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class IndexTrackerRequest extends FormRequest
 {
     /**
-     * The stretches of time the tracker can be read over.
-     *
-     * Presets rather than two date pickers: the question people bring to a
-     * tracker is "how have we been doing lately", and picking a fortnight in
-     * March is not something anybody asks of it.
-     *
-     * @var list<string>
+     * How far back the tracker looks when the caller does not say.
      */
-    public const RANGES = ['7', '30', '90', 'all'];
-
-    /**
-     * The stretch used when the caller does not say.
-     */
-    public const DEFAULT_RANGE = '30';
+    public const DEFAULT_DAYS = 30;
 
     /**
      * Determine if the user is authorized to make this request.
@@ -41,36 +29,56 @@ class IndexTrackerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'range' => ['nullable', 'string', Rule::in(self::RANGES)],
+            'from' => ['nullable', 'date'],
+            // Both bounds are inclusive, so the same day in each is a single
+            // day rather than nothing at all.
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
             'page' => ['nullable', 'integer', 'min:1'],
         ];
     }
 
     /**
-     * The range asked for, with the default filled in.
+     * Get the custom validation messages.
+     *
+     * @return array<string, string>
      */
-    public function range(): string
+    public function messages(): array
     {
-        $range = $this->string('range')->value();
-
-        return in_array($range, self::RANGES, strict: true) ? $range : self::DEFAULT_RANGE;
+        return [
+            'to.after_or_equal' => 'The end of the range cannot fall before its start.',
+        ];
     }
 
     /**
-     * The first day counted, or null when counting from the beginning.
+     * The first day counted.
      *
      * Whole days rather than a rolling window of hours, so a win logged this
-     * morning and one logged last night both count as today — which is how a
-     * streak counts them too. The range is inclusive of today, so seven days
-     * means today and the six before it.
+     * morning and one logged last night both count for today — which is how a
+     * streak counts them too.
      */
-    public function since(): ?CarbonInterface
+    public function from(): CarbonInterface
     {
-        return match ($this->range()) {
-            '7' => today()->subDays(6),
-            '30' => today()->subDays(29),
-            '90' => today()->subDays(89),
-            default => null,
-        };
+        return $this->filled('from')
+            ? $this->date('from')->startOfDay()
+            : today()->subDays(self::DEFAULT_DAYS - 1);
+    }
+
+    /**
+     * The last day counted, taken to the end of it so a win logged at teatime
+     * on the closing day is not left out of its own range.
+     */
+    public function to(): CarbonInterface
+    {
+        return $this->filled('to')
+            ? $this->date('to')->endOfDay()
+            : today()->endOfDay();
+    }
+
+    /**
+     * How many days the range covers, both ends included.
+     */
+    public function days(): int
+    {
+        return (int) $this->from()->startOfDay()->diffInDays($this->to()->startOfDay()) + 1;
     }
 }

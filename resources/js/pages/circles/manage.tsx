@@ -1,10 +1,11 @@
-import { Form, Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowLeft, Ban, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
+import { Form, Head, router, useForm } from '@inertiajs/react';
+import { Ban, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import CircleManagementController from '@/actions/App/Http/Controllers/CircleManagementController';
 import { CircleBadge } from '@/components/circle-badge';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import InputError from '@/components/input-error';
+import { Page, PageHeader } from '@/components/page';
 import { Pagination } from '@/components/pagination';
 import { PersonRow } from '@/components/person-row';
 import { SettingsSection } from '@/components/settings-section';
@@ -75,32 +76,27 @@ export default function Manage({
         <>
             <Head title={`Manage ${circle.name}`} />
 
-            <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-                <Button variant="ghost" size="sm" asChild className="-ml-2 mb-4">
-                    <Link href={membersTab(circle.id)} prefetch>
-                        <ArrowLeft className="size-4" />
-                        Back to the circle
-                    </Link>
-                </Button>
+            {/*
+              * The frame matches the circle's other pages so the header and the
+              * way back line up as you move between them; the content keeps a
+              * readable measure inside it, since a form field the width of the
+              * page is harder to fill in, not easier.
+              */}
+            <Page width="wide">
+                <PageHeader
+                    title={`Manage ${circle.name}`}
+                    description="Only you can see this page — you own this circle."
+                    back={{ href: membersTab(circle.id), label: 'Back to the circle' }}
+                    leading={
+                        <CircleBadge
+                            initial={circle.icon_initial}
+                            color={circle.color_hex}
+                            size="lg"
+                        />
+                    }
+                />
 
-                <header className="flex items-center gap-3">
-                    <CircleBadge
-                        initial={circle.icon_initial}
-                        color={circle.color_hex}
-                        size="lg"
-                    />
-
-                    <div className="min-w-0">
-                        <h1 className="truncate text-xl font-semibold tracking-tight">
-                            Manage {circle.name}
-                        </h1>
-                        <p className="text-caption text-muted-foreground">
-                            Only you can see this page — you own this circle.
-                        </p>
-                    </div>
-                </header>
-
-                <div className="mt-8 flex flex-col gap-10">
+                <div className="mt-8 flex max-w-2xl flex-col gap-10">
                     <SettingsSection
                         title="Details"
                         description="How the circle appears everywhere it is listed."
@@ -426,7 +422,7 @@ export default function Manage({
                         />
                     </SettingsSection>
                 </div>
-            </div>
+            </Page>
         </>
     );
 }

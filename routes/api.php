@@ -7,14 +7,17 @@ use App\Http\Controllers\Api\V1\CircleInvitationController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\DiscoverController;
 use App\Http\Controllers\Api\V1\FollowController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProgressController;
+use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
 use App\Http\Resources\Api\V1\UserResource;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->as('api.v1.')->group(function () {
@@ -103,6 +106,40 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::post('circles/{circle}/invitations', [CircleInvitationController::class, 'store'])
             ->middleware('throttle:60,1')
             ->name('circles.invitations.store');
+
+        /*
+         * Channel authorisation for the mobile and web clients.
+         *
+         * Laravel already registers `/broadcasting/auth`, but on the `web`
+         * guard — it expects a session cookie. These clients carry a Sanctum
+         * bearer token and nothing else, so they get their own endpoint inside
+         * the authenticated API group. `routes/channels.php` still decides who
+         * may listen to what; this only settles who is asking.
+         */
+        Route::post('broadcasting/auth', fn (Request $request) => Broadcast::auth($request))
+            ->name('broadcasting.auth');
+
+        Route::post('push-tokens', [PushTokenController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('push-tokens.store');
+
+        Route::delete('push-tokens', [PushTokenController::class, 'destroy'])
+            ->middleware('throttle:30,1')
+            ->name('push-tokens.destroy');
+
+        Route::get('notifications', [NotificationController::class, 'index'])
+            ->name('notifications.index');
+
+        Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount'])
+            ->name('notifications.unread');
+
+        Route::post('notifications/read', [NotificationController::class, 'markRead'])
+            ->middleware('throttle:120,1')
+            ->name('notifications.read');
+
+        Route::delete('notifications/{notification}', [NotificationController::class, 'destroy'])
+            ->middleware('throttle:120,1')
+            ->name('notifications.destroy');
 
         Route::get('invitations', [CircleInvitationController::class, 'index'])
             ->name('invitations.index');

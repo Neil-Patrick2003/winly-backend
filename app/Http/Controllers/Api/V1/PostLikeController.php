@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\RecordNotification;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\PostLikeResource;
 use App\Models\Post;
@@ -17,7 +18,7 @@ class PostLikeController extends Controller
      * Liking twice is not an error, it just does not count twice, so a client
      * that double tapped or retried a dropped request lands in one place.
      */
-    public function store(Request $request, Post $post): JsonResponse
+    public function store(Request $request, Post $post, RecordNotification $notify): JsonResponse
     {
         $created = DB::transaction(function () use ($request, $post): bool {
             $like = $post->likes()->firstOrCreate([
@@ -32,6 +33,12 @@ class PostLikeController extends Controller
 
             return true;
         });
+
+        // Only on a new like — a double tap that lands twice is one like, and
+        // one notice.
+        if ($created) {
+            $notify->like($post->user, $request->user(), $post);
+        }
 
         return (new PostLikeResource($post->refresh(), hasLiked: true))
             ->response()

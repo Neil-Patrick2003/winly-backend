@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\Circles\BlockFromCircle;
+use App\Actions\Circles\CreateCircle;
 use App\Actions\Circles\RemoveCircleMember;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexCircleRequest;
@@ -83,31 +84,13 @@ class CircleController extends Controller
      * would need explaining, and every count on the screen would have to
      * special-case it.
      */
-    public function store(StoreCircleRequest $request): JsonResponse
+    public function store(StoreCircleRequest $request, CreateCircle $createCircle): JsonResponse
     {
-        $user = $request->user();
-        $name = trim($request->validated('name'));
-
-        $circle = DB::transaction(function () use ($request, $user, $name): Circle {
-            $circle = Circle::create([
-                'owner_id' => $user->getKey(),
-                'name' => $name,
-                'description' => $request->validated('description'),
-                'tag' => $request->validated('tag'),
-                'icon_initial' => Str::upper(Str::substr($name, 0, 1)),
-                'color_hex' => $this->colourFor($name),
-                'is_private' => false,
-                'members_count' => 1,
-            ]);
-
-            CircleMembership::create([
-                'user_id' => $user->getKey(),
-                'circle_id' => $circle->getKey(),
-                'joined_at' => now(),
-            ]);
-
-            return $circle;
-        });
+        $circle = $createCircle->execute($request->user(), [
+            'name' => $request->validated('name'),
+            'description' => $request->validated('description'),
+            'tag' => $request->validated('tag'),
+        ]);
 
         $circle->setAttribute('is_member', true);
 

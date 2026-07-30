@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Circles\CreateCircle;
+use App\Http\Requests\Api\V1\StoreCircleRequest;
+use App\Http\Requests\IndexMyCirclesRequest;
 use App\Http\Requests\IndexTrackerRequest;
 use App\Models\Circle;
 use App\Models\CircleMembership;
@@ -16,12 +19,16 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\Builder as BaseBuilder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\QueryBuilder\AllowedFilter;
+use Spatie\QueryBuilder\QueryBuilder;
 
 class CircleController extends Controller
 {
@@ -31,32 +38,170 @@ class CircleController extends Controller
     protected const PER_PAGE = 20;
 
     /**
+     * How recently a circle must have been posted in to count as active.
+     */
+    protected const ACTIVE_WITHIN_DAYS = 7;
+
+    /**
+     * How many faces the stack on a circle's card shows.
+     */
+    protected const FACES_ON_CARD = 3;
+
+    /**
+     * The pastels a circle's card can be washed in.
+     *
+     * @var list<string>
+     */
+    protected const WASHES = ['blue', 'lavender', 'pink', 'peach', 'mint', 'butter'];
+
+    /**
      * List the circles the signed-in user belongs to.
      *
      * The landing page for "My Circles": the sidebar holds one link, and the
      * circles themselves are listed here where there is room to say something
      * about each one.
      */
-    public function index(Request $request): Response
+    public function index(IndexMyCirclesRequest $request): Response
     {
         $user = $request->user();
+        $since = now()->subDays(self::ACTIVE_WITHIN_DAYS);
 
-        $circles = $user->circleMemberships()
-            ->with(['circle' => fn (Relation $query) => $query->withCount('posts')])
-            ->join('circles', 'circles.id', '=', 'circle_memberships.circle_id')
-            ->orderBy('circles.name')
-            ->select('circle_memberships.*')
-            ->get()
-            ->map(fn (CircleMembership $membership): array => [
-                ...$this->circleCard($user, $membership->circle),
-                'posts_count' => $membership->circle->posts_count,
-                'joined_at' => $membership->joined_at->toIso8601String(),
+        /*
+         * Built through Spatie's query builder so the filter and the search
+         * arrive as declared, whitelisted parameters rather than as hand-rolled
+         * reads of the request — and so both are answered in SQL. Filtering the
+         * rows in PHP after loading them, as this did, meant the database
+         * fetching circles only to throw them away a moment later.
+         */
+        $circles = QueryBuilder::for($user->circles())
+            ->allowedFilters(
+                AllowedFilter::callback('search', fn (Builder $query, mixed $term) => $query
+                    ->search(is_string($term) ? $term : null)),
+                AllowedFilter::callback(
+                    'state',
+                    fn (Builder $query, mixed $state) => $this->applyState($query, $state, $since),
+                ),
+            )
+            ->withCount([
+                'posts',
+                // Whether anything has been shared lately is the one thing a
+                // card can say about a circle's health, and it costs a subquery
+                // rather than a second round of rows.
+                'posts as recent_posts_count' => fn (Builder $posts) => $posts
+                    ->where('posts.created_at', '>=', $since),
             ])
+            // Three faces for the stack on the card. Limited in the eager load,
+            // so a circle of four hundred still costs one query.
+            ->with(['members' => fn (Relation $members) => $members
+                ->orderBy('circle_memberships.joined_at')
+                ->limit(self::FACES_ON_CARD)])
+            ->defaultSort('name')
+            ->allowedSorts('name', 'members_count', 'posts_count')
+            ->get()
+            ->map(fn (Circle $circle): array => $this->circleListing($user, $circle))
             ->all();
 
         return Inertia::render('circles/index', [
             'circles' => $circles,
+            'filter' => $request->filter(),
+            'search' => $request->search(),
+            'counts' => $this->tabCounts($user, $since),
         ]);
+    }
+
+    /**
+     * Narrow circles to those that have been posted in lately, or those that
+     * have not.
+     *
+     * @param  Builder<Circle>  $query
+     */
+    protected function applyState(Builder $query, mixed $state, CarbonInterface $since): void
+    {
+        $recent = fn (Builder $posts) => $posts->where('posts.created_at', '>=', $since);
+
+        match ($state) {
+            'active' => $query->whereHas('posts', $recent),
+            'quiet' => $query->whereDoesntHave('posts', $recent),
+            default => null,
+        };
+    }
+
+    /**
+     * Start a circle from the web.
+     *
+     * The same rules and the same writing as the app's own endpoint, so a
+     * circle made here is indistinguishable from one made on a phone.
+     */
+    public function store(StoreCircleRequest $request, CreateCircle $createCircle): RedirectResponse
+    {
+        $circle = $createCircle->execute($request->user(), [
+            'name' => $request->validated('name'),
+            'description' => $request->validated('description'),
+            'tag' => $request->validated('tag'),
+        ]);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => __(':name is yours. You are its first member.', ['name' => $circle->name]),
+        ]);
+
+        return to_route('circles.members', $circle);
+    }
+
+    /**
+     * One circle as its card needs it.
+     *
+     * @return array<string, mixed>
+     */
+    protected function circleListing(User $reader, Circle $circle): array
+    {
+        return [
+            ...$this->circleCard($reader, $circle),
+            'wash' => $this->washFor($circle->name),
+            'posts_count' => $circle->posts_count,
+            'is_active' => (int) $circle->getAttribute('recent_posts_count') > 0,
+            'faces' => $circle->members
+                ->map(fn (User $member): array => [
+                    'id' => $member->id,
+                    'full_name' => $member->full_name,
+                    'avatar_url' => $member->avatar_url,
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * How many circles sit behind each tab.
+     *
+     * Counted over everything the reader belongs to rather than over the
+     * filtered list, or every tab would report the number showing under the
+     * tab already open.
+     *
+     * @return array<string, int>
+     */
+    protected function tabCounts(User $user, CarbonInterface $since): array
+    {
+        $active = $user->circles()
+            ->whereHas('posts', fn (Builder $posts) => $posts
+                ->where('posts.created_at', '>=', $since))
+            ->count();
+
+        $all = $user->circles()->count();
+
+        return ['all' => $all, 'active' => $active, 'quiet' => $all - $active];
+    }
+
+    /**
+     * The pastel a circle is drawn in, decided by its name.
+     *
+     * Stable, so a circle keeps its colour across reloads and between the card
+     * and the chip, and picked here rather than stored so the palette can be
+     * retuned without a migration.
+     */
+    protected function washFor(string $name): string
+    {
+        return self::WASHES[abs(crc32(Str::lower($name))) % count(self::WASHES)];
     }
 
     /**
@@ -250,14 +395,16 @@ class CircleController extends Controller
             array_values($members->getCollection()
                 ->map(fn (CircleMembership $membership): string => $membership->user_id)
                 ->all()),
-            $request->since(),
+            $request->from(),
+            $request->to(),
         );
 
         return Inertia::render('circles/tracker', [
             'circle' => $this->circleProps($request, $circle),
             'winTypes' => Post::WIN_TYPES,
-            'range' => $request->range(),
-            'since' => $request->since()?->toDateString(),
+            'from' => $request->from()->toDateString(),
+            'to' => $request->to()->toDateString(),
+            'days' => $request->days(),
             'members' => $members->through(function (CircleMembership $membership) use ($counts): array {
                 $wins = $counts[$membership->user_id] ?? [];
 
@@ -293,7 +440,7 @@ class CircleController extends Controller
      * @param  list<string>  $userIds
      * @return array<string, array<string, int>> Keyed by user, then win type.
      */
-    protected function winCounts(Circle $circle, array $userIds, ?CarbonInterface $since): array
+    protected function winCounts(Circle $circle, array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
@@ -316,13 +463,12 @@ class CircleController extends Controller
                 // A post reaches a circle through the pivot now. An existence
                 // check rather than a second join, so a win shared into several
                 // circles is still counted once here.
-                ->whereExists(fn (QueryBuilder $shared) => $shared
+                ->whereExists(fn (BaseBuilder $shared) => $shared
                     ->from('circle_post')
                     ->whereColumn('circle_post.post_id', "{$posts}.id")
                     ->where('circle_post.circle_id', $circle->getKey()))
                 ->whereIn("{$posts}.user_id", $userIds)
-                ->when($since !== null, fn (Builder $query) => $query
-                    ->where("{$table}.completed_at", '>=', $since))
+                ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->groupBy("{$posts}.user_id")
                 ->pluck(DB::raw('count(*)'), "{$posts}.user_id");
 

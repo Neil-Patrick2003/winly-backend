@@ -25,7 +25,7 @@ export default function Posts({
                         description="Wins members share into this circle will appear here, newest first."
                     />
                 ) : (
-                    <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
+                    <div className="flex flex-col gap-4">
                         {posts.data.map((post) => (
                             <PostCard key={post.id} post={post} />
                         ))}

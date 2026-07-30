@@ -198,6 +198,16 @@ class User extends Authenticatable implements PasskeyUser
     }
 
     /**
+     * The devices this user can be reached on.
+     *
+     * @return HasMany<PushToken, $this>
+     */
+    public function pushTokens(): HasMany
+    {
+        return $this->hasMany(PushToken::class);
+    }
+
+    /**
      * Circle invitations waiting on this user, or already answered by them.
      *
      * @return HasMany<CircleInvitation, $this>

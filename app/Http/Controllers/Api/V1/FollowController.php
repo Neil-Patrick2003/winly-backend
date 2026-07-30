@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\RecordNotification;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexFollowRequest;
 use App\Http\Resources\Api\V1\FollowStateResource;
@@ -84,7 +85,7 @@ class FollowController extends Controller
      * Following twice is not an error, it just does not count twice: the row
      * and both counters only move when the follow is new.
      */
-    public function store(Request $request, User $user): JsonResponse
+    public function store(Request $request, User $user, RecordNotification $notify): JsonResponse
     {
         $follower = $request->user();
 
@@ -105,6 +106,12 @@ class FollowController extends Controller
 
             return true;
         });
+
+        // Only on a new follow: re-following someone you already follow is a
+        // no-op, and should not put anything back on their alerts.
+        if ($created) {
+            $notify->follow($user, $follower);
+        }
 
         return (new FollowStateResource($user->refresh(), isFollowing: true))
             ->response()

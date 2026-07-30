@@ -12,6 +12,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
 
     Route::get('circles', [CircleController::class, 'index'])->name('circles.index');
+    Route::post('circles', [CircleController::class, 'store'])
+        ->middleware('throttle:20,1')
+        ->name('circles.store');
 
     Route::put('posts/{post}/like', [PostLikeController::class, 'store'])->name('posts.like');
     Route::delete('posts/{post}/like', [PostLikeController::class, 'destroy'])->name('posts.unlike');

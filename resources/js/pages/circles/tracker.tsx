@@ -1,28 +1,26 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { Flame, Users } from 'lucide-react';
 import { EmptyState } from '@/components/empty-state';
 import { Pagination } from '@/components/pagination';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
 import { winTypeMeta } from '@/components/win-type-badge';
 import CircleLayout from '@/layouts/circle/circle-layout';
 import { cn } from '@/lib/utils';
 import { tracker } from '@/routes/circles';
-import type { CircleHeader, Paginated, TrackerRange, TrackerRow, WinType } from '@/types';
+import type { CircleHeader, Paginated, TrackerRow, WinType } from '@/types';
 
-const rangeLabels: Record<TrackerRange, string> = {
-    '7': 'Last 7 days',
-    '30': 'Last 30 days',
-    '90': 'Last 90 days',
-    all: 'All time',
-};
+/** The day, written the way this reader's locale writes days. */
+function readable(date: string): string {
+    return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
 
 /** A count, with nothing dimmed so the ones who showed up stand out. */
 function Count({ value, label }: { value: number; label: string }) {
@@ -49,28 +47,30 @@ export default function Tracker({
     circle,
     members,
     winTypes,
-    range,
-    since,
+    from,
+    to,
+    days,
+    errors,
 }: {
     circle: CircleHeader;
     members: Paginated<TrackerRow>;
     winTypes: WinType[];
-    range: TrackerRange;
-    since: string | null;
+    from: string;
+    to: string;
+    days: number;
+    errors: Record<string, string>;
 }) {
-    const changeRange = (next: string) =>
+    const range = useForm({ from, to });
+
+    const apply = (event: React.FormEvent) => {
+        event.preventDefault();
+
         router.get(
             tracker(circle.id).url,
-            { range: next },
+            { from: range.data.from, to: range.data.to },
             { preserveState: true, preserveScroll: true, replace: true },
         );
-
-    const rangeCaption = since
-        ? `Wins shared into this circle since ${new Date(since).toLocaleDateString(
-              undefined,
-              { month: 'short', day: 'numeric', year: 'numeric' },
-          )}.`
-        : 'Every win shared into this circle.';
+    };
 
     return (
         <>
@@ -78,29 +78,62 @@ export default function Tracker({
 
             <CircleLayout circle={circle}>
                 <div className="space-y-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
                         <p className="text-caption text-muted-foreground">
-                            {rangeCaption}
+                            Wins shared into this circle between{' '}
+                            <span className="font-medium text-foreground">
+                                {readable(from)}
+                            </span>{' '}
+                            and{' '}
+                            <span className="font-medium text-foreground">
+                                {readable(to)}
+                            </span>{' '}
+                            — {days} {days === 1 ? 'day' : 'days'}.
                         </p>
 
-                        <Select value={range} onValueChange={changeRange}>
-                            <SelectTrigger
-                                className="w-44"
-                                aria-label="Date range"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {(
-                                    Object.keys(rangeLabels) as TrackerRange[]
-                                ).map((key) => (
-                                    <SelectItem key={key} value={key}>
-                                        {rangeLabels[key]}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <form onSubmit={apply} className="flex flex-wrap items-end gap-2">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="from" className="text-caption">
+                                    From
+                                </Label>
+                                <Input
+                                    id="from"
+                                    type="date"
+                                    value={range.data.from}
+                                    max={range.data.to}
+                                    onChange={(event) =>
+                                        range.setData('from', event.target.value)
+                                    }
+                                    className="h-9 w-40"
+                                />
+                            </div>
+
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="to" className="text-caption">
+                                    To
+                                </Label>
+                                <Input
+                                    id="to"
+                                    type="date"
+                                    value={range.data.to}
+                                    min={range.data.from}
+                                    onChange={(event) =>
+                                        range.setData('to', event.target.value)
+                                    }
+                                    className="h-9 w-40"
+                                    aria-invalid={!! errors.to}
+                                />
+                            </div>
+
+                            <Button type="submit" variant="outline" className="h-9">
+                                Apply
+                            </Button>
+                        </form>
                     </div>
+
+                    {errors.to && (
+                        <p className="text-caption text-destructive">{errors.to}</p>
+                    )}
 
                     {members.data.length === 0 ? (
                         <EmptyState
@@ -113,8 +146,8 @@ export default function Tracker({
                             <div className="overflow-x-auto rounded-card border border-border shadow-card">
                                 <table className="w-full border-collapse">
                                     <caption className="sr-only">
-                                        Wins by kind for each member of {circle.name},{' '}
-                                        {rangeLabels[range].toLowerCase()}
+                                        Wins by kind for each member of {circle.name},
+                                        from {readable(from)} to {readable(to)}
                                     </caption>
 
                                     <thead>

@@ -103,7 +103,7 @@ test('the tracker counts each kind of win a member has shared', function () {
         ->assertInertia(fn ($page) => $page
             ->component('circles/tracker')
             ->where('winTypes', ['meditation', 'learning', 'movement'])
-            ->where('range', '30')
+            ->where('days', 30)
             ->has('members.data', 2)
             ->where('members.data.1.full_name', 'Bea Member')
             ->where('members.data.1.wins.meditation', 2)
@@ -124,37 +124,68 @@ test('a kind nobody has done still gets a column, at zero', function () {
         );
 });
 
-test('the range decides what is counted', function () {
+test('the two dates decide what is counted', function () {
     shareWin($this->circle, $this->member, 'meditation', today());
     shareWin($this->circle, $this->member, 'meditation', today()->subDays(20));
 
     $this->actingAs($this->member)
-        ->get(route('circles.tracker', ['circle' => $this->circle, 'range' => '7']))
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->subDays(6)->toDateString(),
+            'to' => today()->toDateString(),
+        ]))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('range', '7')
+            ->where('days', 7)
             ->where('members.data.1.wins.meditation', 1)
         );
 
     $this->actingAs($this->member)
-        ->get(route('circles.tracker', ['circle' => $this->circle, 'range' => '30']))
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->subDays(29)->toDateString(),
+            'to' => today()->toDateString(),
+        ]))
         ->assertOk()
         ->assertInertia(fn ($page) => $page->where('members.data.1.wins.meditation', 2));
 });
 
-test('all time counts wins older than any window', function () {
-    shareWin($this->circle, $this->member, 'learning', today()->subYear());
+test('both ends of the range are counted, not just what falls between', function () {
+    $opened = today()->subDays(5);
+    $closed = today()->subDays(3);
+
+    // One win on each boundary, and one outside.
+    shareWin($this->circle, $this->member, 'movement', $opened);
+    shareWin($this->circle, $this->member, 'learning', $closed);
+    shareWin($this->circle, $this->member, 'meditation', today()->subDays(6));
 
     $this->actingAs($this->member)
-        ->get(route('circles.tracker', ['circle' => $this->circle, 'range' => '90']))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page->where('members.data.1.wins.learning', 0));
-
-    $this->actingAs($this->member)
-        ->get(route('circles.tracker', ['circle' => $this->circle, 'range' => 'all']))
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => $opened->toDateString(),
+            'to' => $closed->toDateString(),
+        ]))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
-            ->where('since', null)
+            ->where('days', 3)
+            ->where('members.data.1.wins.movement', 1)
+            ->where('members.data.1.wins.learning', 1)
+            ->where('members.data.1.wins.meditation', 0)
+        );
+});
+
+test('a win late on the closing day is still inside the range', function () {
+    shareWin($this->circle, $this->member, 'learning', today()->setTime(23, 45));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->toDateString(),
+            'to' => today()->toDateString(),
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('days', 1)
             ->where('members.data.1.wins.learning', 1)
         );
 });
@@ -185,10 +216,14 @@ test('the tracker carries each members streak', function () {
         );
 });
 
-test('an unknown range falls back to the default rather than erroring', function () {
+test('a range that ends before it starts is refused', function () {
     $this->actingAs($this->member)
-        ->get(route('circles.tracker', ['circle' => $this->circle, 'range' => 'forever']))
-        ->assertSessionHasErrors('range');
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->toDateString(),
+            'to' => today()->subWeek()->toDateString(),
+        ]))
+        ->assertSessionHasErrors('to');
 });
 
 test('the tracker runs the same queries however many members there are', function () {
