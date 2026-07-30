@@ -170,6 +170,20 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
             ->middleware('throttle:30,1')
             ->name('posts.store');
 
+        /*
+         * An edit can carry replacement photos, and a multipart body only
+         * arrives intact on a POST. Clients send one with `_method=PATCH`,
+         * which Laravel resolves before routing — so this stays a PATCH and
+         * the uploads still work.
+         */
+        Route::patch('posts/{post}', [PostController::class, 'update'])
+            ->middleware('throttle:30,1')
+            ->name('posts.update');
+
+        Route::delete('posts/{post}', [PostController::class, 'destroy'])
+            ->middleware('throttle:30,1')
+            ->name('posts.destroy');
+
         Route::get('profile', [ProfileController::class, 'me'])
             ->name('profile.show');
 
