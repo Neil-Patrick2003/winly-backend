@@ -26,6 +26,8 @@ class UserResource extends JsonResource
             'avatar_url' => $this->avatar_url,
             'bio' => $this->bio,
             'cover_gradient' => $this->cover_gradient,
+            // Null until one is uploaded; the gradient is what shows until then.
+            'cover_url' => $this->cover_url,
             // The streak still standing rather than the stored column, so this
             // and the profile endpoint never disagree about the same user.
             'streak_days' => $this->currentStreak(),

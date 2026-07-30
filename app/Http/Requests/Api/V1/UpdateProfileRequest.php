@@ -55,6 +55,8 @@ class UpdateProfileRequest extends FormRequest
             'is_private' => ['sometimes', 'boolean'],
             'avatar' => $this->avatarRules(),
             'remove_avatar' => ['sometimes', 'boolean'],
+            'cover' => $this->coverPhotoRules(),
+            'remove_cover' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -69,6 +71,7 @@ class UpdateProfileRequest extends FormRequest
             'username.regex' => 'A username can only use lowercase letters, numbers and underscores.',
             'username.unique' => 'That username is already taken.',
             'avatar.mimetypes' => 'A profile photo has to be a JPEG, PNG, WebP or HEIC image.',
+            'cover.mimetypes' => 'A cover photo has to be a JPEG, PNG, WebP or HEIC image.',
         ];
     }
 
@@ -97,5 +100,17 @@ class UpdateProfileRequest extends FormRequest
     public function removesAvatar(): bool
     {
         return $this->boolean('remove_avatar');
+    }
+
+    /**
+     * Whether the caller asked for their current cover photo to be dropped.
+     *
+     * Taking the photo down does not clear `cover_gradient`: the gradient is
+     * what shows underneath, so removing the photo reveals it again rather than
+     * leaving the header blank.
+     */
+    public function removesCover(): bool
+    {
+        return $this->boolean('remove_cover');
     }
 }

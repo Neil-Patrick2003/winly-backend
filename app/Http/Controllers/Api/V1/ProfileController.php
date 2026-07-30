@@ -20,9 +20,11 @@ class ProfileController extends Controller
     protected const DISK = 'public';
 
     /**
-     * The folder within that disk.
+     * The folder within that disk, per kind of photo.
      */
-    protected const FOLDER = 'avatars';
+    protected const AVATAR_FOLDER = 'avatars';
+
+    protected const COVER_FOLDER = 'covers';
 
     /**
      * Show the signed-in user's own profile.
@@ -72,9 +74,23 @@ class ProfileController extends Controller
         }
 
         if ($request->hasFile('avatar')) {
-            $user->avatar_url = $this->storeAvatar($request->file('avatar'));
+            $user->avatar_url = $this->storePhoto($request->file('avatar'), self::AVATAR_FOLDER);
         } elseif ($request->removesAvatar()) {
             $user->avatar_url = null;
+        }
+
+        /*
+         * The cover follows the avatar exactly, including the rule that sending
+         * a photo alongside `remove_cover` sets the photo — asking for one is
+         * the clearer of the two intents.
+         *
+         * Removing it leaves `cover_gradient` alone, so the header falls back to
+         * the gradient it had before rather than going blank.
+         */
+        if ($request->hasFile('cover')) {
+            $user->cover_url = $this->storePhoto($request->file('cover'), self::COVER_FOLDER);
+        } elseif ($request->removesCover()) {
+            $user->cover_url = null;
         }
 
         $user->save();
@@ -110,9 +126,9 @@ class ProfileController extends Controller
      *
      * @throws RuntimeException
      */
-    protected function storeAvatar(UploadedFile $avatar): string
+    protected function storePhoto(UploadedFile $photo, string $folder): string
     {
-        $path = $avatar->store(self::FOLDER, self::DISK);
+        $path = $photo->store($folder, self::DISK);
 
         if ($path === false) {
             throw new RuntimeException('The profile photo could not be stored.');

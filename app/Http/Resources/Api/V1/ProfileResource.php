@@ -33,6 +33,8 @@ class ProfileResource extends JsonResource
             'avatar_url' => $this->avatar_url,
             'bio' => $this->bio,
             'cover_gradient' => $this->cover_gradient,
+            // Null until one is uploaded; the gradient is what shows until then.
+            'cover_url' => $this->cover_url,
 
             /*
              * How many times they have posted, and how many wins those posts

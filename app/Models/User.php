@@ -31,6 +31,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string|null $avatar_url
  * @property string|null $bio
  * @property string|null $cover_gradient
+ * @property string|null $cover_url
  * @property int $streak_days
  * @property int $longest_streak
  * @property Carbon|null $last_win_on
@@ -48,7 +49,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['full_name', 'username', 'email', 'password_hash', 'avatar_url', 'bio', 'cover_gradient', 'is_private', 'is_admin', 'last_active_at'])]
+#[Fillable(['full_name', 'username', 'email', 'password_hash', 'avatar_url', 'bio', 'cover_gradient', 'cover_url', 'is_private', 'is_admin', 'last_active_at'])]
 #[Hidden(['password_hash', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {

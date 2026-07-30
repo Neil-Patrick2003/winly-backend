@@ -106,6 +106,20 @@ trait ProfileValidationRules
     }
 
     /**
+     * Get the validation rules used to validate an uploaded cover photo.
+     *
+     * The same rules an avatar gets. A cover is shown far wider than a profile
+     * photo, but it is the same kind of file and holding it to a different
+     * ceiling would only make one of the two limits a surprise.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function coverPhotoRules(): array
+    {
+        return $this->avatarRules();
+    }
+
+    /**
      * Get the validation rules used to validate user emails.
      *
      * @return array<int, ValidationRule|array<mixed>|string>
