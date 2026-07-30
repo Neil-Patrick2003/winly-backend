@@ -37,6 +37,16 @@ class PostResource extends JsonResource
             'viewer_has_liked' => $this->relationLoaded('viewerLike')
                 ? $this->viewerLike !== null
                 : false,
+            /*
+             * Whether the reader has kept this post.
+             *
+             * Theirs alone: it says nothing about how many people saved it,
+             * because nobody is told that — a save is a private bookmark, not a
+             * reaction.
+             */
+            'viewer_has_saved' => $this->relationLoaded('viewerSave')
+                ? $this->viewerSave !== null
+                : false,
             'wins' => $this->wins(),
         ];
     }

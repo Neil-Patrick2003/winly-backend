@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProgressController;
 use App\Http\Controllers\Api\V1\PushTokenController;
+use App\Http\Controllers\Api\V1\SavedPostController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
 use App\Http\Resources\Api\V1\UserResource;
@@ -167,6 +168,11 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('posts', [PostController::class, 'index'])
             ->name('posts.index');
 
+        // Above `posts/{post}`, or the wildcard claims the word "saved" and
+        // answers with a 404 for a post by that id.
+        Route::get('posts/saved', [PostController::class, 'saved'])
+            ->name('posts.saved');
+
         Route::get('posts/{post}', [PostController::class, 'show'])
             ->name('posts.show');
 
@@ -218,6 +224,14 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::put('posts/{post}/like', [PostLikeController::class, 'store'])
             ->middleware('throttle:120,1')
             ->name('posts.like');
+
+        Route::put('posts/{post}/save', [SavedPostController::class, 'store'])
+            ->middleware('throttle:60,1')
+            ->name('posts.save');
+
+        Route::delete('posts/{post}/save', [SavedPostController::class, 'destroy'])
+            ->middleware('throttle:60,1')
+            ->name('posts.unsave');
 
         Route::delete('posts/{post}/like', [PostLikeController::class, 'destroy'])
             ->middleware('throttle:120,1')

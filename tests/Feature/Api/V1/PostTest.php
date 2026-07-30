@@ -381,11 +381,13 @@ test('the feed runs the same number of queries however many posts it returns', f
     // three win tables and their files, and the circles each post was shared
     // into. Growing the page must not add queries.
     //
-    // The budget is nine rather than eight because posts carry their circles
-    // now — one more eager load, not one more per post, which is what the
-    // equality above actually guards.
+    // The budget has grown twice, each time by one eager load for the whole
+    // page rather than one per post: eight to nine when posts began carrying
+    // their circles, nine to ten when a row began saying whether the reader has
+    // saved it. The equality above is what actually guards against the per-post
+    // kind, and it is the line that must never be relaxed.
     expect($many)->toBe($few);
-    expect($few)->toBeLessThanOrEqual(9);
+    expect($few)->toBeLessThanOrEqual(10);
 });
 
 test('the feed is cursor paginated', function () {

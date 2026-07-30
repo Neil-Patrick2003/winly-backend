@@ -131,6 +131,33 @@ class Post extends Model
     }
 
     /**
+     * Everyone who has kept this post to come back to.
+     *
+     * Nobody is ever shown this, and nothing counts it — a save is private to
+     * whoever made it. It exists so the rows go when the post does.
+     *
+     * @return HasMany<SavedPost, $this>
+     */
+    public function saves(): HasMany
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    /**
+     * Whether the person reading has kept this post, as their own row.
+     *
+     * Unconstrained this is simply the first save on the post, so — like
+     * `viewerLike` — it is only meaningful eager loaded against one user. The
+     * unique index on (user_id, post_id) guarantees there is at most one.
+     *
+     * @return HasOne<SavedPost, $this>
+     */
+    public function viewerSave(): HasOne
+    {
+        return $this->hasOne(SavedPost::class);
+    }
+
+    /**
      * The comments left on this post.
      *
      * @return HasMany<Comment, $this>

@@ -70,6 +70,9 @@ class PostController extends Controller
         return [
             ...self::WIN_RELATIONS,
             'viewerLike' => fn (Relation $query) => $query->whereBelongsTo($viewer),
+            // Narrowed to the reader for the same reason, and carried on every
+            // post so a card knows whether its bookmark is already filled in.
+            'viewerSave' => fn (Relation $query) => $query->whereBelongsTo($viewer),
             'user' => fn (Relation $query) => $query->withActiveStory(),
             'user.followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
             // One eager load for the whole page, so a feed of circle posts
@@ -114,6 +117,43 @@ class PostController extends Controller
         $posts = $user->posts()
             ->with($this->relationsFor($request->user()))
             ->latestFirst()
+            ->cursorPaginate($request->perPage())
+            ->withQueryString();
+
+        return PostResource::collection($posts);
+    }
+
+    /**
+     * The posts this person has kept, most recently saved first.
+     *
+     * Ordered by when it was saved and not by when it was written: the list is
+     * a pile you put things on, so the last thing added is on top even if the
+     * post itself is a month old.
+     *
+     * The posts are queried through a join rather than by paginating the saves
+     * and swapping the posts in afterwards — the cursor has to describe the
+     * rows the paginator actually holds, or the next page is built against the
+     * wrong table.
+     *
+     * @return AnonymousResourceCollection<int, PostResource>
+     */
+    public function saved(IndexPostRequest $request): AnonymousResourceCollection
+    {
+        $viewer = $request->user();
+
+        $posts = Post::query()
+            ->join('saved_posts', 'saved_posts.post_id', '=', 'posts.id')
+            ->where('saved_posts.user_id', $viewer->getKey())
+            ->select('posts.*')
+            // Aliased onto the model so the cursor can read what it orders by.
+            // The save's id breaks ties on its timestamp.
+            ->addSelect([
+                'saved_posts.created_at as saved_at',
+                'saved_posts.id as save_id',
+            ])
+            ->with($this->relationsFor($viewer))
+            ->orderByDesc('saved_at')
+            ->orderByDesc('save_id')
             ->cursorPaginate($request->perPage())
             ->withQueryString();
 
