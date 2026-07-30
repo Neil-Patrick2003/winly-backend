@@ -1,11 +1,14 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { Flame, Users } from 'lucide-react';
+import { DateRangePicker } from '@/components/date-range-picker';
 import { EmptyState } from '@/components/empty-state';
 import { Pagination } from '@/components/pagination';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
 import { winTypeMeta } from '@/components/win-type-badge';
 import CircleLayout from '@/layouts/circle/circle-layout';
@@ -60,14 +63,10 @@ export default function Tracker({
     days: number;
     errors: Record<string, string>;
 }) {
-    const range = useForm({ from, to });
-
-    const apply = (event: React.FormEvent) => {
-        event.preventDefault();
-
+    const apply = (nextFrom: string, nextTo: string) => {
         router.get(
             tracker(circle.id).url,
-            { from: range.data.from, to: range.data.to },
+            { from: nextFrom, to: nextTo },
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
@@ -91,48 +90,23 @@ export default function Tracker({
                             — {days} {days === 1 ? 'day' : 'days'}.
                         </p>
 
-                        <form onSubmit={apply} className="flex flex-wrap items-end gap-2">
-                            <div className="grid gap-1.5">
-                                <Label htmlFor="from" className="text-caption">
-                                    From
-                                </Label>
-                                <Input
-                                    id="from"
-                                    type="date"
-                                    value={range.data.from}
-                                    max={range.data.to}
-                                    onChange={(event) =>
-                                        range.setData('from', event.target.value)
-                                    }
-                                    className="h-9 w-40"
-                                />
-                            </div>
-
-                            <div className="grid gap-1.5">
-                                <Label htmlFor="to" className="text-caption">
-                                    To
-                                </Label>
-                                <Input
-                                    id="to"
-                                    type="date"
-                                    value={range.data.to}
-                                    min={range.data.from}
-                                    onChange={(event) =>
-                                        range.setData('to', event.target.value)
-                                    }
-                                    className="h-9 w-40"
-                                    aria-invalid={!! errors.to}
-                                />
-                            </div>
-
-                            <Button type="submit" variant="outline" className="h-9">
-                                Apply
-                            </Button>
-                        </form>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="range" className="text-caption">
+                                Date range
+                            </Label>
+                            <DateRangePicker
+                                from={from}
+                                to={to}
+                                onApply={apply}
+                                invalid={!!errors.to}
+                            />
+                        </div>
                     </div>
 
                     {errors.to && (
-                        <p className="text-caption text-destructive">{errors.to}</p>
+                        <p className="text-caption text-destructive">
+                            {errors.to}
+                        </p>
                     )}
 
                     {members.data.length === 0 ? (
@@ -146,8 +120,9 @@ export default function Tracker({
                             <div className="overflow-x-auto rounded-card border border-border shadow-card">
                                 <table className="w-full border-collapse">
                                     <caption className="sr-only">
-                                        Wins by kind for each member of {circle.name},
-                                        from {readable(from)} to {readable(to)}
+                                        Wins by kind for each member of{' '}
+                                        {circle.name}, from {readable(from)} to{' '}
+                                        {readable(to)}
                                     </caption>
 
                                     <thead>
@@ -167,8 +142,11 @@ export default function Tracker({
                                             </th>
 
                                             {winTypes.map((type) => {
-                                                const { label, icon: Icon, ink } =
-                                                    winTypeMeta[type];
+                                                const {
+                                                    label,
+                                                    icon: Icon,
+                                                    ink,
+                                                } = winTypeMeta[type];
 
                                                 return (
                                                     <th
@@ -211,17 +189,26 @@ export default function Tracker({
                                                 >
                                                     <div className="flex items-center gap-3">
                                                         <UserAvatar
-                                                            name={member.full_name}
-                                                            src={member.avatar_url}
+                                                            name={
+                                                                member.full_name
+                                                            }
+                                                            src={
+                                                                member.avatar_url
+                                                            }
                                                         />
 
                                                         <div className="min-w-0">
                                                             <p className="truncate text-sm font-medium">
-                                                                {member.full_name}
+                                                                {
+                                                                    member.full_name
+                                                                }
                                                             </p>
                                                             {member.username && (
                                                                 <p className="truncate text-caption text-muted-foreground">
-                                                                    @{member.username}
+                                                                    @
+                                                                    {
+                                                                        member.username
+                                                                    }
                                                                 </p>
                                                             )}
                                                         </div>
@@ -249,14 +236,18 @@ export default function Tracker({
                                                                     )}
                                                                     aria-hidden
                                                                 />
-                                                                {member.streak_days}
+                                                                {
+                                                                    member.streak_days
+                                                                }
                                                             </span>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            {member.streak_days === 0
+                                                            {member.streak_days ===
+                                                            0
                                                                 ? 'No streak running'
                                                                 : `${member.streak_days} day streak`}
-                                                            {member.longest_streak > 0 &&
+                                                            {member.longest_streak >
+                                                                0 &&
                                                                 ` · best ${member.longest_streak}`}
                                                         </TooltipContent>
                                                     </Tooltip>
@@ -268,9 +259,15 @@ export default function Tracker({
                                                         className="px-3 py-3 text-center"
                                                     >
                                                         <Count
-                                                            value={member.wins[type]}
+                                                            value={
+                                                                member.wins[
+                                                                    type
+                                                                ]
+                                                            }
                                                             label={`${member.wins[type]} ${winTypeMeta[type].label.toLowerCase()} ${
-                                                                member.wins[type] === 1
+                                                                member.wins[
+                                                                    type
+                                                                ] === 1
                                                                     ? 'win'
                                                                     : 'wins'
                                                             }`}
@@ -288,8 +285,9 @@ export default function Tracker({
                             </div>
 
                             <p className="text-caption text-muted-foreground">
-                                A dash means none of that kind in this range. The streak
-                                counts days in a row with a win, wherever it was shared.
+                                A dash means none of that kind in this range.
+                                The streak counts days in a row with a win,
+                                wherever it was shared.
                             </p>
 
                             <Pagination page={members} label="members" />
