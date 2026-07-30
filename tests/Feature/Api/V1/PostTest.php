@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Circle;
+use App\Models\CircleMembership;
 use App\Models\Follow;
 use App\Models\Post;
 use App\Models\User;
@@ -522,4 +524,74 @@ test('an over-long reference link is a validation error, not a database error', 
     ])->assertUnprocessable()->assertJsonValidationErrors('wins.0.reference_source');
 
     expect(Post::count())->toBe(0);
+});
+
+test('the feed defaults to every post', function () {
+    $stranger = User::factory()->create();
+    Post::factory()->for($stranger)->create();
+    Post::factory()->for($this->user)->create();
+
+    $this->getJson(route('api.v1.posts.index'))
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
+});
+
+test('the following feed carries only posts by people the reader follows', function () {
+    $followed = User::factory()->create();
+    $stranger = User::factory()->create();
+
+    Follow::factory()->create(['follower_id' => $this->user->id, 'followee_id' => $followed->id]);
+
+    $theirs = Post::factory()->for($followed)->create();
+    Post::factory()->for($stranger)->create();
+    // Your own wins are not "following": you did not choose to follow yourself,
+    // and the profile is where your own posts are read.
+    Post::factory()->for($this->user)->create();
+
+    $this->getJson(route('api.v1.posts.index', ['feed' => 'following']))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $theirs->id);
+});
+
+test('the circles feed carries what was shared into any circle the reader is in', function () {
+    $mine = Circle::factory()->create();
+    CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $mine->id]);
+
+    $theirs = Circle::factory()->create();
+
+    $author = User::factory()->create();
+    $shared = Post::factory()->for($author)->create();
+    $shared->circles()->attach($mine->id);
+
+    $elsewhere = Post::factory()->for($author)->create();
+    $elsewhere->circles()->attach($theirs->id);
+
+    // Shared with nobody in particular, so it belongs to no circle's wall.
+    Post::factory()->for($author)->create();
+
+    $this->getJson(route('api.v1.posts.index', ['feed' => 'circles']))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $shared->id);
+});
+
+test('a post in several of the reader\'s circles is served once', function () {
+    $first = Circle::factory()->create();
+    $second = Circle::factory()->create();
+    CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $first->id]);
+    CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $second->id]);
+
+    $post = Post::factory()->for(User::factory())->create();
+    $post->circles()->attach([$first->id, $second->id]);
+
+    $this->getJson(route('api.v1.posts.index', ['feed' => 'circles']))
+        ->assertOk()
+        ->assertJsonCount(1, 'data');
+});
+
+test('an unknown feed is rejected', function () {
+    $this->getJson(route('api.v1.posts.index', ['feed' => 'everyone']))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('feed');
 });

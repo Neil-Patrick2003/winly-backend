@@ -198,15 +198,36 @@ class Post extends Model
     }
 
     /**
-     * Limit posts to those written by the given users.
+     * Limit posts to those written by people the reader follows.
+     *
+     * A subquery rather than a plucked list of ids: somebody following
+     * thousands of people would otherwise pull every one of those ids into
+     * memory to ask a question the database can answer on its own.
      *
      * @param  Builder<Post>  $query
-     * @param  list<string>  $userIds
      */
     #[Scope]
-    protected function authoredBy(Builder $query, array $userIds): void
+    protected function followedBy(Builder $query, User $reader): void
     {
-        $query->whereIn('user_id', $userIds);
+        $query->whereIn('user_id', $reader->following()->getQuery()->select('users.id'));
+    }
+
+    /**
+     * Limit posts to those shared into any circle the reader belongs to.
+     *
+     * `whereHas` rather than a join, because a post shared into three circles a
+     * reader is in must still come back once — a join would hand it over three
+     * times and the feed would repeat it.
+     *
+     * @param  Builder<Post>  $query
+     */
+    #[Scope]
+    protected function inCirclesOf(Builder $query, User $reader): void
+    {
+        $query->whereHas('circles', fn (Builder $circles) => $circles->whereIn(
+            'circles.id',
+            $reader->circles()->getQuery()->select('circles.id')
+        ));
     }
 
     /**

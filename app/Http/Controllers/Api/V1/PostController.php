@@ -17,6 +17,7 @@ use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
@@ -186,9 +187,27 @@ class PostController extends Controller
     public function index(IndexPostRequest $request): AnonymousResourceCollection
     {
         $viewer = $request->user();
+        $feed = $request->feed();
 
         $posts = Post::query()
             ->with($this->relationsFor($viewer))
+            /*
+             * Narrowed by how the reader wants to arrive at the posts, not by
+             * who may see them — a circle is where a win is placed, not who it
+             * is kept from, so none of these is a privacy boundary.
+             *
+             * Both narrowed feeds are subqueries against the reader's own
+             * relations, so neither loads a list of ids to ask a question the
+             * database can answer, and neither disturbs the cursor's ordering.
+             */
+            ->when(
+                $feed === 'following',
+                fn (Builder $query) => $query->followedBy($viewer)
+            )
+            ->when(
+                $feed === 'circles',
+                fn (Builder $query) => $query->inCirclesOf($viewer)
+            )
             ->latestFirst()
             ->cursorPaginate($request->perPage())
             ->withQueryString();

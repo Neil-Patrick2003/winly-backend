@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\V1;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class IndexPostRequest extends FormRequest
 {
@@ -16,6 +17,18 @@ class IndexPostRequest extends FormRequest
      * The largest page a caller may ask for.
      */
     public const MAX_PER_PAGE = 50;
+
+    /**
+     * Which slice of the feed to serve.
+     *
+     * `all` is everything anybody has shared. `following` narrows to the people
+     * the reader chose to follow, and `circles` to what has been shared into
+     * circles they are in — not two audiences but two ways of arriving at the
+     * same posts, which is why one post can appear under both.
+     *
+     * @var list<string>
+     */
+    public const FEEDS = ['all', 'following', 'circles'];
 
     /**
      * Determine if the user is authorized to make this request.
@@ -35,7 +48,16 @@ class IndexPostRequest extends FormRequest
         return [
             'per_page' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_PER_PAGE],
             'cursor' => ['nullable', 'string'],
+            'feed' => ['nullable', 'string', Rule::in(self::FEEDS)],
         ];
+    }
+
+    /**
+     * Which slice was asked for, defaulting to the whole feed.
+     */
+    public function feed(): string
+    {
+        return $this->filled('feed') ? $this->string('feed')->value() : 'all';
     }
 
     /**
