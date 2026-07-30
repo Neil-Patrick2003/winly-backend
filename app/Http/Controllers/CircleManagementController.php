@@ -1,0 +1,289 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Actions\Circles\BlockFromCircle;
+use App\Actions\Circles\InviteToCircle;
+use App\Actions\Circles\RemoveCircleMember;
+use App\Http\Requests\UpdateCircleRequest;
+use App\Models\Circle;
+use App\Models\CircleInvitation;
+use App\Models\CircleMembership;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class CircleManagementController extends Controller
+{
+    /**
+     * How many members the management list shows before paging.
+     */
+    protected const PER_PAGE = 20;
+
+    /**
+     * How many people the invite picker offers at once.
+     */
+    protected const CANDIDATE_LIMIT = 25;
+
+    /**
+     * Show the circle's settings.
+     */
+    public function edit(Request $request, Circle $circle): Response
+    {
+        Gate::authorize('manage', $circle);
+
+        return Inertia::render('circles/manage', [
+            'circle' => [
+                'id' => $circle->id,
+                'name' => $circle->name,
+                'description' => $circle->description,
+                'icon_initial' => $circle->icon_initial,
+                'color_hex' => $circle->color_hex,
+                'tag' => $circle->tag,
+                'members_count' => $circle->members_count,
+                'can_manage' => true,
+            ],
+            'members' => $circle->memberships()
+                ->with('user')
+                ->orderBy('joined_at')
+                ->paginate(self::PER_PAGE)
+                ->through(fn (CircleMembership $membership): array => [
+                    'id' => $membership->user->id,
+                    'full_name' => $membership->user->full_name,
+                    'username' => $membership->user->username,
+                    'avatar_url' => $membership->user->avatar_url,
+                    'joined_at' => $membership->joined_at->toIso8601String(),
+                    'is_owner' => $membership->user_id === $circle->owner_id,
+                ]),
+            'invitations' => $this->pendingInvitations($circle),
+            'blocked' => $this->blocked($circle),
+            'candidates' => $this->candidates($request, $circle),
+            'search' => $request->string('search')->value(),
+        ]);
+    }
+
+    /**
+     * Save the circle's settings.
+     */
+    public function update(UpdateCircleRequest $request, Circle $circle): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        $circle->update($request->validated());
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Circle updated.')]);
+
+        return back();
+    }
+
+    /**
+     * Ask somebody to join.
+     *
+     * Only people already on Winly can be asked this way — an invitation is a
+     * row against a user. Bringing somebody who has no account yet is a
+     * different thing, and belongs to a share link rather than to this form.
+     */
+    public function invite(Request $request, Circle $circle, InviteToCircle $invite): RedirectResponse
+    {
+        Gate::authorize('invite', $circle);
+
+        $validated = $request->validate([
+            'user_id' => [
+                'required',
+                'uuid',
+                Rule::exists('users', 'id')->whereNull('deleted_at'),
+                Rule::notIn([$request->user()->getKey()]),
+            ],
+        ], [
+            'user_id.not_in' => 'You are already in this circle.',
+            'user_id.exists' => 'That person is no longer around.',
+        ]);
+
+        $invitee = User::query()->whereKey($validated['user_id'])->firstOrFail();
+
+        $invite->execute($circle, $request->user(), $invitee);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Invitation sent.')]);
+
+        return back();
+    }
+
+    /**
+     * Take back an invitation that has not been answered.
+     */
+    public function revokeInvitation(Circle $circle, CircleInvitation $invitation): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        abort_unless($invitation->circle_id === $circle->getKey(), 404);
+
+        $invitation->delete();
+
+        Inertia::flash('toast', ['type' => 'info', 'message' => __('Invitation taken back.')]);
+
+        return back();
+    }
+
+    /**
+     * Turn a member out of the circle.
+     */
+    public function removeMember(Circle $circle, User $user, RemoveCircleMember $remove): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        $remove->execute($circle, $user);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Member removed.')]);
+
+        return back();
+    }
+
+    /**
+     * Bar somebody from the circle.
+     */
+    public function block(Request $request, Circle $circle, User $user, BlockFromCircle $block): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        $block->execute($circle, $user, $request->user());
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Member blocked.')]);
+
+        return back();
+    }
+
+    /**
+     * Clear the bar. It does not put them back in.
+     */
+    public function unblock(Circle $circle, User $user, BlockFromCircle $block): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        $block->undo($circle, $user);
+
+        Inertia::flash('toast', ['type' => 'info', 'message' => __('Member unblocked.')]);
+
+        return back();
+    }
+
+    /**
+     * Take the circle down.
+     */
+    public function destroy(Circle $circle): RedirectResponse
+    {
+        Gate::authorize('delete', $circle);
+
+        $circle->delete();
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Circle deleted.')]);
+
+        return to_route('circles.index');
+    }
+
+    /**
+     * The invitations still waiting on an answer.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function pendingInvitations(Circle $circle): array
+    {
+        return array_values($circle->invitations()
+            ->pending()
+            ->with('invitee')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (CircleInvitation $invitation): array => [
+                'id' => $invitation->id,
+                'invited_at' => $invitation->created_at?->toIso8601String(),
+                'user' => [
+                    'id' => $invitation->invitee->id,
+                    'full_name' => $invitation->invitee->full_name,
+                    'username' => $invitation->invitee->username,
+                    'avatar_url' => $invitation->invitee->avatar_url,
+                ],
+            ])
+            ->all());
+    }
+
+    /**
+     * Who has been barred.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function blocked(Circle $circle): array
+    {
+        return array_values(User::query()
+            ->whereIn('id', $circle->blocks()->select('user_id'))
+            ->orderBy('full_name')
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'full_name' => $user->full_name,
+                'username' => $user->username,
+                'avatar_url' => $user->avatar_url,
+            ])
+            ->all());
+    }
+
+    /**
+     * Who the owner can ask, and where each of them already stands.
+     *
+     * Mutual follows only, matching the app: following somebody is not a
+     * relationship either of you agreed to, and the mutual case is the one
+     * people mean when they say friend.
+     *
+     * Everyone comes back, those already in and already asked included, each
+     * with a status. A list that quietly dropped them would look like the
+     * invitation had never been sent.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function candidates(Request $request, Circle $circle): array
+    {
+        $viewer = $request->user();
+        $search = $request->string('search')->trim()->value();
+        // Fetched once rather than asked per row, which would be a query per
+        // candidate to answer a question the whole list shares.
+        $blockedIds = $circle->blocks()->pluck('user_id')->all();
+
+        return array_values(User::query()
+            ->whereIn('id', $viewer->following()->select('users.id'))
+            ->whereIn('id', $viewer->followers()->select('users.id'))
+            ->when(filled($search), function (Builder $query) use ($search): void {
+                $term = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
+
+                $query->where(fn (Builder $inner) => $inner
+                    ->where('full_name', 'like', $term)
+                    ->orWhere('username', 'like', $term));
+            })
+            ->withExists([
+                'circleMemberships as is_member' => fn (Builder $query) => $query
+                    ->where('circle_id', $circle->getKey()),
+            ])
+            ->addSelect(['invite_status' => CircleInvitation::query()
+                ->select('status')
+                ->whereColumn('circle_invitations.invitee_id', 'users.id')
+                ->where('circle_invitations.circle_id', $circle->getKey())
+                ->limit(1),
+            ])
+            ->orderBy('full_name')
+            ->orderBy('id')
+            ->limit(self::CANDIDATE_LIMIT)
+            ->get()
+            ->map(fn (User $user): array => [
+                'id' => $user->id,
+                'full_name' => $user->full_name,
+                'username' => $user->username,
+                'avatar_url' => $user->avatar_url,
+                'is_member' => (bool) $user->getAttribute('is_member'),
+                'invite_status' => $user->getAttribute('invite_status'),
+                'is_blocked' => in_array($user->getKey(), $blockedIds, strict: true),
+            ])
+            ->all());
+    }
+}

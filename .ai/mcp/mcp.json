@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "laravel-boost": {
+      "command": "/Users/neilpatrickb.mulingbayan/Library/Application Support/Herd/bin/php84",
+      "args": [
+        "/Users/neilpatrickb.mulingbayan/Herd/winly-backend/artisan",
+        "boost:mcp"
+      ]
+    }
+  }
+}

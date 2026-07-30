@@ -12,3 +12,9 @@ export type NavItem = {
     icon?: LucideIcon | null;
     isActive?: boolean;
 };
+
+export type NavGroup = {
+    /** Section heading shown above the group. */
+    label: string;
+    items: NavItem[];
+};
