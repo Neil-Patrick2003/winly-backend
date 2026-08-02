@@ -33,8 +33,9 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
             ->name('logout');
 
-        Route::get('user', fn (Request $request) => new UserResource($request->user()->loadActiveStory()->loadCount('posts')))
-            ->name('user');
+        Route::get('user', fn (Request $request) => new UserResource(
+            $request->user()->loadActiveStory()->loadNewStoryActivity()->loadCount('posts')
+        ))->name('user');
 
         Route::get('stories', [StoryController::class, 'index'])
             ->name('stories.index');
@@ -141,6 +142,12 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::post('notifications/read', [NotificationController::class, 'markRead'])
             ->middleware('throttle:120,1')
             ->name('notifications.read');
+
+        // Above the wildcard delete for the same reason `posts/saved` sits
+        // above `posts/{post}` — a bare `{notification}` would claim the word.
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'markOneRead'])
+            ->middleware('throttle:240,1')
+            ->name('notifications.read.one');
 
         Route::delete('notifications/{notification}', [NotificationController::class, 'destroy'])
             ->middleware('throttle:120,1')

@@ -27,6 +27,7 @@ beforeEach(function () {
 function postWithMovement(array $media = []): Post
 {
     test()->post(route('api.v1.posts.store'), [
+        'visibility' => 'public',
         'caption' => 'Went out for a walk.',
         'wins' => [['type' => 'movement', 'movement_type' => 'walk', 'media' => $media]],
     ])->assertCreated();
@@ -41,6 +42,7 @@ test('guests cannot edit or delete a post', function () {
     app()['auth']->forgetGuards();
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement']],
     ])->assertUnauthorized();
 
@@ -52,6 +54,7 @@ test('a post answers only to the person who wrote it', function () {
     WinMovement::factory()->for($theirs, 'post')->create();
 
     $this->patchJson(route('api.v1.posts.update', $theirs), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement', 'movement_type' => 'sprint']],
     ])->assertForbidden();
 
@@ -68,6 +71,7 @@ test('editing rewrites the caption and the win it carries', function () {
     ]);
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'caption' => 'Read two chapters.',
         'wins' => [[
             'type' => 'learning',
@@ -91,6 +95,7 @@ test('a caption can be cleared, and left alone by saying nothing about it', func
 
     // An empty string arrives as null, by way of `ConvertEmptyStringsToNull`.
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'caption' => '',
         'wins' => [['type' => 'movement']],
     ])
@@ -101,6 +106,7 @@ test('a caption can be cleared, and left alone by saying nothing about it', func
 
     // Not mentioned at all, which is a different thing from cleared.
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement']],
     ])
         ->assertOk()
@@ -115,6 +121,7 @@ test('a kind left out of the edit is dropped, and its files with it', function (
 
     // Only the learning is named, so the movement is being removed.
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [['type' => 'learning', 'learned_text' => 'Something.']],
     ])
         ->assertOk()
@@ -133,6 +140,7 @@ test('a kind that was not there can be added', function () {
     WinMovement::factory()->for($post, 'post')->create(['movement_type' => 'walk']);
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [
             ['type' => 'movement', 'movement_type' => 'walk'],
             ['type' => 'meditation', 'duration_minutes' => 15],
@@ -148,7 +156,7 @@ test('the last win cannot be edited away', function () {
     $post = Post::factory()->for($this->user)->create();
     WinMovement::factory()->for($post, 'post')->create();
 
-    $this->patchJson(route('api.v1.posts.update', $post), ['wins' => []])
+    $this->patchJson(route('api.v1.posts.update', $post), ['visibility' => 'public', 'wins' => []])
         ->assertUnprocessable()
         ->assertJsonValidationErrors('wins');
 
@@ -166,6 +174,7 @@ test('named media is dropped, its file deleted, and the rest renumbered', functi
     expect(Storage::disk('public')->allFiles('media'))->toHaveCount(3);
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [[
             'type' => 'movement',
             'movement_type' => 'walk',
@@ -186,6 +195,7 @@ test('new files are added after the ones already there', function () {
     $post = postWithMovement([UploadedFile::fake()->image('first.jpg')]);
 
     $this->patch(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [[
             'type' => 'movement',
             'movement_type' => 'walk',
@@ -208,6 +218,7 @@ test('media belonging to another post cannot be removed through this one', funct
     $theirMedia = $theirWin->addWinMedia(UploadedFile::fake()->image('theirs.jpg'));
 
     $this->patchJson(route('api.v1.posts.update', $mine), [
+        'visibility' => 'public',
         'wins' => [[
             'type' => 'movement',
             'remove_media_ids' => [$theirMedia->uuid],
@@ -229,6 +240,7 @@ test('the media cap counts what the win is already holding', function () {
     }
 
     $this->patch(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [[
             'type' => 'movement',
             'media' => [UploadedFile::fake()->image('one-too-many.jpg')],
@@ -299,6 +311,7 @@ test('moving a win to another day rebuilds the streak around it', function () {
 
     // Pull Wednesday's win back to Sunday, breaking the run.
     $this->patchJson(route('api.v1.posts.update', $wednesday), [
+        'visibility' => 'public',
         'wins' => [[
             'type' => 'movement',
             'completed_at' => '2026-07-26 08:00:00',
@@ -325,6 +338,7 @@ test('an edit never costs someone their longest streak', function () {
     $this->user->forceFill(['longest_streak' => 11])->save();
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
     ])->assertOk();
 
@@ -337,6 +351,7 @@ test('wins_count follows the wins on the post', function () {
     WinLearning::factory()->for($post, 'post')->create(['learned_text' => 'A thing.']);
 
     $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
     ])->assertOk();
 

@@ -25,6 +25,9 @@ class PostResource extends JsonResource
         return [
             'id' => $this->id,
             'caption' => $this->caption,
+            // Who it was shared with, so an edit screen can open on the choice
+            // that was made rather than working it back out of the circles.
+            'visibility' => $this->visibility,
             'likes_count' => $this->likes_count,
             'comments_count' => $this->comments_count,
             'shares_count' => $this->shares_count,

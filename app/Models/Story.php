@@ -25,6 +25,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read string|null $image_url
  * @property string|null $caption
  * @property Carbon $expires_at
+ * @property Carbon|null $viewers_checked_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
@@ -65,6 +66,7 @@ class Story extends Model implements HasMedia
     {
         return [
             'expires_at' => 'datetime',
+            'viewers_checked_at' => 'datetime',
         ];
     }
 

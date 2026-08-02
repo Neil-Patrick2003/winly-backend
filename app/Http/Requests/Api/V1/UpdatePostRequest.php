@@ -43,7 +43,24 @@ class UpdatePostRequest extends FormRequest
         return [
             'caption' => ['nullable', 'string', 'max:2000'],
 
-            'circle_ids' => ['nullable', 'array', 'max:50'],
+            /*
+             * Required, like the rest of an edit: the request says what the
+             * post should end up being rather than what changed about it. A
+             * sharing setting left out would have to mean "leave it", and a
+             * screen that shows the choice but does not send it back would
+             * silently keep an audience the author thought they had changed.
+             */
+            'visibility' => ['required', 'string', Rule::in(Post::VISIBILITIES)],
+
+            // Same bargain as creating: named only when the author picked them,
+            // and refused otherwise rather than dropped. See StorePostRequest.
+            'circle_ids' => [
+                Rule::requiredIf(fn (): bool => $this->input('visibility') === Post::VISIBILITY_CUSTOM),
+                'prohibited_unless:visibility,'.Post::VISIBILITY_CUSTOM,
+                'array',
+                'min:1',
+                'max:50',
+            ],
             'circle_ids.*' => [
                 'uuid',
                 'distinct',

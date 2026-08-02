@@ -85,6 +85,12 @@ class PostController extends Controller
         Gate::authorize('view', $circle);
 
         $posts = $circle->posts()
+            // The circle gate above has already established the reader is a
+            // member, so everything placed here is theirs to read. Applied
+            // anyway: this is the one list where the narrowing is implied by
+            // another check rather than stated, and an implied boundary is the
+            // kind that goes missing when the other check is later relaxed.
+            ->visibleTo($request->user())
             ->with($this->relationsFor($request->user()))
             ->latestFirst()
             ->cursorPaginate($request->perPage())
@@ -96,15 +102,17 @@ class PostController extends Controller
     /**
      * One person's own posts, newest first.
      *
-     * What a profile shows. Nothing is narrowed: a circle is where a post is
-     * *placed*, not who it is kept from, so a profile lists everything its
-     * owner has shared.
+     * What a profile shows — and only the part of it this reader is allowed to
+     * see. A circle post is listed for its members and for nobody else, so two
+     * people opening the same profile get different lists, which is the whole
+     * point of the setting.
      *
      * @return AnonymousResourceCollection<int, PostResource>
      */
     public function byUser(IndexPostRequest $request, User $user): AnonymousResourceCollection
     {
         $posts = $user->posts()
+            ->visibleTo($request->user())
             ->with($this->relationsFor($request->user()))
             ->latestFirst()
             ->cursorPaginate($request->perPage())
@@ -134,6 +142,13 @@ class PostController extends Controller
         $posts = Post::query()
             ->join('saved_posts', 'saved_posts.post_id', '=', 'posts.id')
             ->where('saved_posts.user_id', $viewer->getKey())
+            /*
+             * Kept once and readable now are two different questions. Somebody
+             * may save a circle post and later leave that circle, and the pile
+             * is not a way around the boundary — what they can no longer see
+             * they can no longer see, saved or not.
+             */
+            ->visibleTo($viewer)
             ->select('posts.*')
             // Aliased onto the model so the cursor can read what it orders by.
             // The save's id breaks ties on its timestamp.
@@ -159,6 +174,8 @@ class PostController extends Controller
      */
     public function show(Request $request, Post $post): PostResource
     {
+        Gate::authorize('view', $post);
+
         $post->load($this->relationsFor($request->user()));
 
         return new PostResource($post);
@@ -181,9 +198,16 @@ class PostController extends Controller
         $posts = Post::query()
             ->with($this->relationsFor($viewer))
             /*
-             * Narrowed by how the reader wants to arrive at the posts, not by
-             * who may see them — a circle is where a win is placed, not who it
-             * is kept from, so none of these is a privacy boundary.
+             * What the reader may see, before anything about how they asked to
+             * see it. This is the boundary; the two below are only routes to
+             * it, and a post excluded here is excluded from every one of them.
+             */
+            ->visibleTo($viewer)
+            /*
+             * Narrowed by how the reader wants to arrive at the posts rather
+             * than by who may see them — the line above has already settled
+             * that. The default feed is everything they are allowed to read;
+             * these two are ways of asking for less.
              *
              * Both narrowed feeds are subqueries against the reader's own
              * relations, so neither loads a list of ids to ask a question the
@@ -219,7 +243,7 @@ class PostController extends Controller
         $post = DB::transaction(function () use ($request, $streak): Post {
             $user = $request->user();
 
-            $post = $user->posts()->create($request->safe()->only(['caption']));
+            $post = $user->posts()->create($request->safe()->only(['caption', 'visibility']));
 
             /*
              * One post, attached to every circle it was shared with. Attaching
@@ -227,10 +251,11 @@ class PostController extends Controller
              * circles one thing — one comment thread, one set of likes, and one
              * row in anybody's feed.
              */
-            $circleIds = $request->validated('circle_ids') ?? [];
-            if ($circleIds !== []) {
-                $post->circles()->sync($circleIds);
-            }
+            $post->circles()->sync($this->circlesFor(
+                $user,
+                (string) $request->validated('visibility'),
+                $request->validated('circle_ids') ?? [],
+            ));
 
             $wins = $request->validated('wins');
 
@@ -279,17 +304,23 @@ class PostController extends Controller
         $discarded = [];
 
         DB::transaction(function () use ($request, $post, &$discarded): void {
-            $post->update($request->safe()->only(['caption']));
+            $post->update($request->safe()->only(['caption', 'visibility']));
 
             /*
-             * Only touched when the caller says something about it. Sending an
-             * empty list means "no circles"; saying nothing at all means "leave
-             * the sharing alone", which is what a client editing only the text
-             * of a post is doing.
+             * Re-resolved from the sharing setting every time, because the two
+             * are one answer: the circles a post sits in are what `visibility`
+             * means, and leaving them where they were while the setting moved
+             * would produce a public post still pinned inside a circle, or a
+             * circle post reaching nobody.
+             *
+             * The author is the reader for this, not whoever is editing —
+             * the policy has already established those are the same person.
              */
-            if ($request->exists('circle_ids')) {
-                $post->circles()->sync($request->validated('circle_ids') ?? []);
-            }
+            $post->circles()->sync($this->circlesFor(
+                $post->user,
+                (string) $request->validated('visibility'),
+                $request->validated('circle_ids') ?? [],
+            ));
 
             $wins = $request->validated('wins');
             $keeping = array_column($wins, 'type');
@@ -339,6 +370,38 @@ class PostController extends Controller
         $stats->execute($request->user());
 
         return response()->json(['data' => ['id' => $post->id]]);
+    }
+
+    /**
+     * The circles a post should sit in, given who it is for.
+     *
+     * Public reaches everybody and so belongs in no circle: leaving it in one
+     * would put it on that circle's wall as though it were shared there, and
+     * the wall is meant to be what the group was actually given.
+     *
+     * "All circles" is resolved here, once, to the circles the author is in at
+     * this moment — and then it is just a list like any other. That is what
+     * makes the setting a snapshot rather than a standing instruction: joining
+     * a circle next month cannot reach back and hand it this win.
+     *
+     * @param  list<string>  $chosen  The ids named by the author, when they
+     *                                picked the circles themselves.
+     * @return list<string>
+     */
+    protected function circlesFor(User $author, string $visibility, array $chosen): array
+    {
+        return match ($visibility) {
+            Post::VISIBILITY_PUBLIC => [],
+            Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
+                strval(...),
+                $author->circles()->pluck('circles.id')->all(),
+            )),
+            Post::VISIBILITY_CUSTOM => $chosen,
+            // Unreachable: validation has already narrowed it to the three.
+            // Stated so a fourth added to the model without a branch here fails
+            // loudly rather than quietly sharing a win with nobody.
+            default => throw new InvalidArgumentException("Unknown visibility [{$visibility}]."),
+        };
     }
 
     /**

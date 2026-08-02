@@ -250,11 +250,13 @@ test('a win can be shared into a circle you are in, but not one you are not', fu
     $theirs = Circle::factory()->create();
 
     $this->postJson(route('api.v1.posts.store'), [
+        'visibility' => 'custom',
         'circle_ids' => [$theirs->id],
         'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
     ])->assertUnprocessable()->assertJsonValidationErrors('circle_ids.0');
 
     $this->postJson(route('api.v1.posts.store'), [
+        'visibility' => 'custom',
         'circle_ids' => [$this->circle->id],
         'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
     ])->assertCreated();
@@ -408,6 +410,7 @@ test('one share reaches every circle wall it was sent to', function () {
     CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $second->id]);
 
     $this->postJson(route('api.v1.posts.store'), [
+        'visibility' => 'custom',
         'circle_ids' => [$this->circle->id, $second->id],
         'caption' => 'Shared with both.',
         'wins' => [['type' => 'movement', 'movement_type' => 'walk']],

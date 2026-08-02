@@ -59,6 +59,10 @@ function something()
  * A post reaches a circle through the `circle_post` pivot rather than a column
  * on the post, so creating one takes two steps everywhere it is done.
  *
+ * Shared into the circle and nowhere else, which is what placing a win in a
+ * group now means: only its members may read it. Pass `visibility` to override
+ * where a test wants a public post that also happens to sit in a circle.
+ *
  * @param  array<string, mixed>  $attributes
  */
 function postInCircle(
@@ -68,6 +72,7 @@ function postInCircle(
 ): Post {
     $post = Post::factory()->create([
         'user_id' => $author->id,
+        'visibility' => Post::VISIBILITY_CUSTOM,
         ...$attributes,
     ]);
 

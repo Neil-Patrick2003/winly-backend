@@ -15,6 +15,7 @@ beforeEach(function () {
 function postAWin(): void
 {
     test()->postJson(route('api.v1.posts.store'), [
+        'visibility' => 'public',
         'wins' => [['type' => 'movement', 'movement_type' => 'run']],
     ])->assertCreated();
 }
@@ -136,6 +137,7 @@ test('one persons streak does not touch anybody elses', function () {
 
 test('posting three wins at once is still one day shown up for', function () {
     $this->postJson(route('api.v1.posts.store'), [
+        'visibility' => 'public',
         'wins' => [
             ['type' => 'meditation', 'duration_minutes' => 10],
             ['type' => 'learning', 'learned_text' => 'Streaks count days.'],

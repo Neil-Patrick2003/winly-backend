@@ -44,6 +44,17 @@ class UserResource extends JsonResource
                 'has_active_story',
                 fn (mixed $value): bool => (bool) $value,
             ),
+            /*
+             * Whether there is anything new about your own story — one just
+             * posted, or somebody having watched since you last looked.
+             *
+             * Yours alone: this is only ever loaded for the signed-in user,
+             * and nobody else has business asking it about you.
+             */
+            'has_new_story_activity' => $this->whenHas(
+                'has_new_story_activity',
+                fn (mixed $value): bool => (bool) $value,
+            ),
             'last_active_at' => $this->last_active_at?->toIso8601String(),
             'email_verified_at' => $this->email_verified_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),

@@ -49,14 +49,38 @@ class NotificationController extends Controller
     /**
      * Mark everything read.
      *
-     * All at once rather than one at a time: the badge answers "is there
-     * anything new", and opening the list is the answer to it.
+     * Kept as something the reader asks for outright rather than something
+     * opening the list does on their behalf. Merely looking at a list is not
+     * the same as having read what is on it, and clearing the lot on arrival
+     * meant a single tap settled forty alerts nobody had seen.
      */
     public function markRead(Request $request): JsonResponse
     {
         $request->user()->notifications()->unread()->update(['is_read' => true]);
 
         return response()->json(['data' => ['unread' => 0]]);
+    }
+
+    /**
+     * Mark one read.
+     *
+     * What acting on a row does. Answers the remaining unread count so the
+     * bell can settle without a second request asking for it.
+     */
+    public function markOneRead(Request $request, Notification $notification): JsonResponse
+    {
+        // 404 rather than 403, exactly as deleting one does: whether somebody
+        // else's alert exists is not a thing to confirm to a stranger.
+        abort_unless($notification->user_id === $request->user()->getKey(), 404);
+
+        $notification->update(['is_read' => true]);
+
+        return response()->json([
+            'data' => [
+                'id' => $notification->getKey(),
+                'unread' => $request->user()->notifications()->unread()->count(),
+            ],
+        ]);
     }
 
     /**

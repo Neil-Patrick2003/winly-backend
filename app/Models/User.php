@@ -361,6 +361,38 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
     }
 
     /**
+     * Load whether there is anything new about this person's own story.
+     *
+     * What lights the ring around your own bubble. Everyone else's ring means
+     * "not watched yet", which cannot mean anything about your own — so this
+     * means the two things you might not have caught up on:
+     *
+     * - a story you have posted and not yet opened the viewers on, which is
+     *   what makes a fresh one light up before anybody has watched it;
+     * - somebody watching since the last time you did open them.
+     *
+     * Both are the same question asked of `viewers_checked_at`: never looked,
+     * or looked before the newest view arrived. Correlated against the story
+     * row rather than a fixed time, so each story is measured from its own
+     * last look and checking one does not dim a ring another earned.
+     */
+    public function loadNewStoryActivity(): static
+    {
+        return $this->loadExists([
+            'stories as has_new_story_activity' => fn (Builder $stories) => $stories
+                ->active()
+                ->where(fn (Builder $unchecked) => $unchecked
+                    ->whereNull('stories.viewers_checked_at')
+                    ->orWhereHas('views', fn (Builder $views) => $views->whereColumn(
+                        'story_views.viewed_at',
+                        '>',
+                        'stories.viewers_checked_at',
+                    ))
+                ),
+        ]);
+    }
+
+    /**
      * Flag whether the user has a story still running.
      *
      * A subquery rather than a loaded relation: the answer is one boolean per

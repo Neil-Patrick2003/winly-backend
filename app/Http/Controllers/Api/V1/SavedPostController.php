@@ -7,6 +7,7 @@ use App\Models\Post;
 use App\Models\SavedPost;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Keeping a post to come back to.
@@ -25,6 +26,8 @@ class SavedPostController extends Controller
      */
     public function store(Request $request, Post $post): JsonResponse
     {
+        Gate::authorize('view', $post);
+
         $save = SavedPost::firstOrCreate([
             'user_id' => $request->user()->getKey(),
             'post_id' => $post->getKey(),
