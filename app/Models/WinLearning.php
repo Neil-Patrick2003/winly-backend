@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\MediaLibrary\HasMedia;
 
 /**
  * @property string $id
@@ -23,7 +24,7 @@ use Illuminate\Support\Carbon;
  * @property-read Post $post
  */
 #[Fillable(['post_id', 'learned_text', 'reference_source', 'media_attached', 'completed_at'])]
-class WinLearning extends Model
+class WinLearning extends Model implements HasMedia
 {
     /** @use HasFactory<WinLearningFactory> */
     use HasFactory, HasUuids, HasWinMedia;

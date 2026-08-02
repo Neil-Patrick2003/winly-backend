@@ -5,7 +5,7 @@ use App\Models\Story;
 use App\Models\StoryReaction;
 use App\Models\StoryView;
 use App\Models\User;
-use App\Models\WinMedia;
+use App\Rules\MediaFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -38,7 +38,7 @@ test('a story can be shared', function () {
         ->assertJsonStructure(['data' => ['id', 'image_url', 'caption', 'expires_at', 'is_active', 'created_at']]);
 
     expect($response->json('data.image_url'))->toStartWith('http');
-    expect(Storage::disk('public')->allFiles('stories'))->toHaveCount(1);
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(1);
     expect(Story::sole()->user_id)->toBe($this->user->id);
 });
 
@@ -88,18 +88,24 @@ test('a video is rejected', function () {
 
 test('an oversized photo is rejected', function () {
     $this->post(route('api.v1.stories.store'), [
-        'image' => UploadedFile::fake()->create('huge.jpg', WinMedia::MAX_IMAGE_KB + 1, 'image/jpeg'),
+        'image' => UploadedFile::fake()->create('huge.jpg', MediaFile::MAX_IMAGE_KB + 1, 'image/jpeg'),
     ])->assertUnprocessable()->assertJsonValidationErrors('image');
 });
 
-test('a person can take their own story down', function () {
+test('a person can take their own story down, and its photo with it', function () {
     $story = Story::factory()->create(['user_id' => $this->user->id]);
+    $story->addMedia(UploadedFile::fake()->image('sunset.jpg'))->toMediaCollection(Story::IMAGE_COLLECTION);
+
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(1);
 
     $this->deleteJson(route('api.v1.stories.destroy', $story))
         ->assertOk()
         ->assertJsonPath('data.id', $story->id);
 
-    expect(Story::count())->toBe(0);
+    // The file used to be left behind: the row went and nothing ever went
+    // looking for the bytes it named.
+    expect(Story::count())->toBe(0)
+        ->and(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('a story cannot be taken down by anybody else', function () {

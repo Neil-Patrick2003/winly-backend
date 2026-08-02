@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Concerns\ServesMediaUrls;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -20,6 +21,8 @@ use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property string $id
@@ -28,10 +31,10 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password_hash
- * @property string|null $avatar_url
+ * @property-read string|null $avatar_url
  * @property string|null $bio
  * @property string|null $cover_gradient
- * @property string|null $cover_url
+ * @property-read string|null $cover_url
  * @property int $streak_days
  * @property int $longest_streak
  * @property Carbon|null $last_win_on
@@ -49,12 +52,47 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['full_name', 'username', 'email', 'password_hash', 'avatar_url', 'bio', 'cover_gradient', 'cover_url', 'is_private', 'is_admin', 'last_active_at'])]
-#[Hidden(['password_hash', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
-class User extends Authenticatable implements PasskeyUser
+#[Fillable(['full_name', 'username', 'email', 'password_hash', 'bio', 'cover_gradient', 'is_private', 'is_admin', 'last_active_at'])]
+#[Hidden(['password_hash', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'media'])]
+class User extends Authenticatable implements HasMedia, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasApiTokens, HasFactory, HasUuids, Notifiable, PasskeyAuthenticatable, SoftDeletes, TwoFactorAuthenticatable;
+    use HasApiTokens, HasFactory, HasUuids, InteractsWithMedia, Notifiable, PasskeyAuthenticatable, ServesMediaUrls, SoftDeletes, TwoFactorAuthenticatable;
+
+    /**
+     * The collections a profile's own photos are kept in.
+     */
+    public const AVATAR_COLLECTION = 'avatar';
+
+    public const COVER_COLLECTION = 'cover';
+
+    /**
+     * The accessors appended when a user is serialised on its own.
+     *
+     * Both used to be columns, so they arrived in the payload without asking.
+     * Inertia shares the signed-in user as the model itself, and the app reads
+     * `avatar_url` straight off it — dropping the columns without this would
+     * quietly take the header photo off every page.
+     *
+     * @var list<string>
+     */
+    protected $appends = ['avatar_url', 'cover_url'];
+
+    /**
+     * Always load the photos with the person.
+     *
+     * `avatar_url` is read on nearly every payload the application sends — a
+     * feed, a member list, a leaderboard — and it is worked out from the media
+     * rather than kept in a column. Left to load on demand it would be one
+     * query per person on the page.
+     *
+     * The cost is one extra query wherever a user is fetched at all, including
+     * the places that never look at the photo. That is the trade being made
+     * deliberately: one query too many everywhere beats a hundred somewhere.
+     *
+     * @var list<string>
+     */
+    protected $with = ['media'];
 
     /**
      * The model's default attribute values.
@@ -112,6 +150,39 @@ class User extends Authenticatable implements PasskeyUser
             'last_active_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Register the profile photo collections.
+     *
+     * Both hold one file. `singleFile` is what makes changing a photo a
+     * replacement rather than an addition: the one before it goes, file and
+     * all. Uploading a new avatar used to leave the old one on the disk with
+     * nothing left pointing at it.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::AVATAR_COLLECTION)->singleFile();
+        $this->addMediaCollection(self::COVER_COLLECTION)->singleFile();
+    }
+
+    /**
+     * The address of this person's profile photo, or null where there is none.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        return $this->mediaUrl(self::AVATAR_COLLECTION);
+    }
+
+    /**
+     * The address of the photo across the top of their profile.
+     *
+     * Null leaves the header falling back to `cover_gradient`, which is why
+     * removing a cover does not touch it.
+     */
+    public function getCoverUrlAttribute(): ?string
+    {
+        return $this->mediaUrl(self::COVER_COLLECTION);
     }
 
     /**

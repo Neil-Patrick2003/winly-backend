@@ -18,20 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
-    /**
-     * The disk story photos are written to.
-     */
-    protected const DISK = 'public';
-
-    /**
-     * The folder within that disk.
-     */
-    protected const FOLDER = 'stories';
-
     /**
      * The stories worth showing this reader, grouped by who posted them.
      *
@@ -182,13 +171,18 @@ class StoryController extends Controller
      */
     public function store(StoreStoryRequest $request): JsonResponse
     {
-        $path = $request->file('image')->store(self::FOLDER, self::DISK);
-
+        /*
+         * The row goes first and the file hangs off it, rather than the file
+         * being written and its address dropped into a column. The story is
+         * what the photo belongs to, and there is no story to belong to until
+         * it exists.
+         */
         $story = $request->user()->stories()->create([
-            'image_url' => url(Storage::disk(self::DISK)->url($path)),
             'caption' => $request->validated('caption'),
             'expires_at' => now()->addHours(Story::LIFETIME_HOURS),
         ]);
+
+        $story->addMedia($request->file('image'))->toMediaCollection(Story::IMAGE_COLLECTION);
 
         return (new StoryResource($story))
             ->response()

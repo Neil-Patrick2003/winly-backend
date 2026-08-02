@@ -12,12 +12,11 @@ use App\Models\Comment;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Rules\MediaFile;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +26,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\MediaLibrary\MediaCollections\Models\Collections\MediaCollection;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 
@@ -307,7 +308,7 @@ class CircleController extends Controller
                     'duration_minutes' => $post->winMeditation->duration_minutes,
                     'completed' => $post->winMeditation->completed,
                 ],
-                'media' => $this->media($post->winMeditation->media),
+                'media' => $this->media($post->winMeditation->winMedia()),
             ];
         }
 
@@ -318,7 +319,7 @@ class CircleController extends Controller
                     'learned_text' => $post->winLearning->learned_text,
                     'reference_source' => $post->winLearning->reference_source,
                 ],
-                'media' => $this->media($post->winLearning->media),
+                'media' => $this->media($post->winLearning->winMedia()),
             ];
         }
 
@@ -328,7 +329,7 @@ class CircleController extends Controller
                 'detail' => [
                     'movement_type' => $post->winMovement->movement_type,
                 ],
-                'media' => $this->media($post->winMovement->media),
+                'media' => $this->media($post->winMovement->winMedia()),
             ];
         }
 
@@ -342,18 +343,23 @@ class CircleController extends Controller
      * models share their media through a concern, and a trait is not something
      * a parameter can be typed against.
      *
-     * @param  Collection<int, WinMedia>  $media
+     * @param  MediaCollection<int, Media>  $media
      * @return list<array<string, mixed>>
      */
-    protected function media(Collection $media): array
+    protected function media(MediaCollection $media): array
     {
-        return array_values($media
-            ->map(fn (WinMedia $file): array => [
-                'id' => $file->id,
-                'url' => $file->url,
-                'kind' => $file->kind,
-            ])
-            ->all());
+        $files = [];
+
+        foreach ($media as $file) {
+            $files[] = [
+                'id' => $file->uuid,
+                // Absolute, for the same reason the API's own payload is.
+                'url' => url($file->getUrl()),
+                'kind' => MediaFile::kindForMime($file->mime_type),
+            ];
+        }
+
+        return $files;
     }
 
     /**

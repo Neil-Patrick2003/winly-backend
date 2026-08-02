@@ -2,7 +2,7 @@
 
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Models\User;
-use App\Models\WinMedia;
+use App\Rules\MediaFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -162,8 +162,28 @@ test('a profile photo can be uploaded', function () {
     $response->assertOk();
 
     expect($response->json('data.avatar_url'))->toStartWith('http');
-    expect(Storage::disk('public')->allFiles('avatars'))->toHaveCount(1);
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(1);
     expect($this->user->refresh()->avatar_url)->toBe($response->json('data.avatar_url'));
+});
+
+test('replacing a profile photo takes the old file with it', function () {
+    $this->post(route('api.v1.profile.update'), [
+        '_method' => 'PATCH',
+        'avatar' => UploadedFile::fake()->image('first.jpg'),
+    ])->assertOk();
+
+    $this->post(route('api.v1.profile.update'), [
+        '_method' => 'PATCH',
+        'avatar' => UploadedFile::fake()->image('second.jpg'),
+    ])->assertOk();
+
+    // The collection holds a single file, so the first photo is gone rather
+    // than sitting on the disk with nothing left pointing at it.
+    $files = Storage::disk('public')->allFiles('media');
+
+    expect($files)->toHaveCount(1)
+        ->and($files[0])->toEndWith('second.jpg')
+        ->and($this->user->refresh()->avatar_url)->toEndWith('second.jpg');
 });
 
 test('a profile photo can be uploaded alongside other fields', function () {
@@ -177,23 +197,26 @@ test('a profile photo can be uploaded alongside other fields', function () {
 });
 
 test('a profile photo can be removed', function () {
-    $this->user->forceFill(['avatar_url' => 'https://example.com/old.jpg'])->save();
+    $this->user->addMedia(UploadedFile::fake()->image('old.jpg'))->toMediaCollection(User::AVATAR_COLLECTION);
 
     $this->patchJson(route('api.v1.profile.update'), ['remove_avatar' => true])
         ->assertOk()
         ->assertJsonPath('data.avatar_url', null);
 
-    expect($this->user->refresh()->avatar_url)->toBeNull();
+    expect($this->user->refresh()->avatar_url)->toBeNull()
+        ->and(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('an edit that says nothing about the photo keeps it', function () {
-    $this->user->forceFill(['avatar_url' => 'https://example.com/keep.jpg'])->save();
+    $this->user->addMedia(UploadedFile::fake()->image('keep.jpg'))->toMediaCollection(User::AVATAR_COLLECTION);
+
+    $kept = $this->user->refresh()->avatar_url;
 
     $this->patchJson(route('api.v1.profile.update'), ['full_name' => 'Still Here'])
         ->assertOk()
-        ->assertJsonPath('data.avatar_url', 'https://example.com/keep.jpg');
+        ->assertJsonPath('data.avatar_url', $kept);
 
-    expect($this->user->refresh()->avatar_url)->toBe('https://example.com/keep.jpg');
+    expect($this->user->refresh()->avatar_url)->toBe($kept);
 });
 
 test('a video cannot be used as a profile photo', function () {
@@ -202,13 +225,13 @@ test('a video cannot be used as a profile photo', function () {
         'avatar' => UploadedFile::fake()->create('clip.mp4', 500, 'video/mp4'),
     ])->assertUnprocessable()->assertJsonValidationErrors('avatar');
 
-    expect(Storage::disk('public')->allFiles('avatars'))->toBeEmpty();
+    expect(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('an oversized profile photo is rejected', function () {
     $this->post(route('api.v1.profile.update'), [
         '_method' => 'PATCH',
-        'avatar' => UploadedFile::fake()->create('huge.jpg', WinMedia::MAX_IMAGE_KB + 1, 'image/jpeg'),
+        'avatar' => UploadedFile::fake()->create('huge.jpg', MediaFile::MAX_IMAGE_KB + 1, 'image/jpeg'),
     ])->assertUnprocessable()->assertJsonValidationErrors('avatar');
 });
 

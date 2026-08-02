@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\MediaLibrary\HasMedia;
 
 /**
  * @property string $id
@@ -22,7 +23,7 @@ use Illuminate\Support\Carbon;
  * @property-read Post $post
  */
 #[Fillable(['post_id', 'movement_type', 'media_attached', 'completed_at'])]
-class WinMovement extends Model
+class WinMovement extends Model implements HasMedia
 {
     /** @use HasFactory<WinMovementFactory> */
     use HasFactory, HasUuids, HasWinMedia;

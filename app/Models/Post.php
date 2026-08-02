@@ -45,6 +45,28 @@ class Post extends Model
     public const WIN_TYPES = ['meditation', 'learning', 'movement'];
 
     /**
+     * Take the wins' media with the post.
+     *
+     * The win rows go by database cascade, but their media cannot: it hangs off
+     * a win by a polymorphic pair, which carries no foreign key, and a cascade
+     * fires no events for anything to listen for. Without this a deleted post
+     * would leave rows pointing at wins that no longer exist.
+     *
+     * The API's own delete has already taken the media away by the time this
+     * runs — it does so before committing, so that the files are only unlinked
+     * once the deletion is certain. This is for every other way a post can go:
+     * a factory, the console, a cleanup script.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Post $post): void {
+            foreach ([$post->winMeditation, $post->winLearning, $post->winMovement] as $win) {
+                $win?->deleteAllMedia();
+            }
+        });
+    }
+
+    /**
      * The model's default attribute values.
      *
      * @var array<string, mixed>

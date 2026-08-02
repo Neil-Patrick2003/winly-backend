@@ -3,13 +3,14 @@
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
 test('users have profile columns', function () {
     $user = User::factory()->create([
         'username' => 'winly',
-        'avatar_url' => 'avatars/winly.jpg',
         'cover_gradient' => 'sunrise',
         'bio' => 'Hello there.',
         'is_private' => true,
@@ -17,10 +18,23 @@ test('users have profile columns', function () {
 
     expect($user->fresh())
         ->username->toBe('winly')
-        ->avatar_url->toBe('avatars/winly.jpg')
         ->cover_gradient->toBe('sunrise')
         ->bio->toBe('Hello there.')
         ->is_private->toBeTrue();
+});
+
+test('a profile photo is read back off the media rather than a column', function () {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+
+    expect($user->avatar_url)->toBeNull();
+
+    $user->addMedia(UploadedFile::fake()->image('me.jpg'))->toMediaCollection(User::AVATAR_COLLECTION);
+
+    expect($user->fresh()->avatar_url)
+        ->toStartWith('http')
+        ->toEndWith('me.jpg');
 });
 
 test('usernames are unique', function () {

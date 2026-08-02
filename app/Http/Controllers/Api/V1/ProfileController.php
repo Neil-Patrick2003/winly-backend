@@ -9,23 +9,9 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 
 class ProfileController extends Controller
 {
-    /**
-     * The disk profile photos are written to.
-     */
-    protected const DISK = 'public';
-
-    /**
-     * The folder within that disk, per kind of photo.
-     */
-    protected const AVATAR_FOLDER = 'avatars';
-
-    protected const COVER_FOLDER = 'covers';
-
     /**
      * Show the signed-in user's own profile.
      *
@@ -73,11 +59,7 @@ class ProfileController extends Controller
             $user->email_verified_at = null;
         }
 
-        if ($request->hasFile('avatar')) {
-            $user->avatar_url = $this->storePhoto($request->file('avatar'), self::AVATAR_FOLDER);
-        } elseif ($request->removesAvatar()) {
-            $user->avatar_url = null;
-        }
+        $this->settlePhoto($user, User::AVATAR_COLLECTION, $request->file('avatar'), $request->removesAvatar());
 
         /*
          * The cover follows the avatar exactly, including the rule that sending
@@ -87,11 +69,7 @@ class ProfileController extends Controller
          * Removing it leaves `cover_gradient` alone, so the header falls back to
          * the gradient it had before rather than going blank.
          */
-        if ($request->hasFile('cover')) {
-            $user->cover_url = $this->storePhoto($request->file('cover'), self::COVER_FOLDER);
-        } elseif ($request->removesCover()) {
-            $user->cover_url = null;
-        }
+        $this->settlePhoto($user, User::COVER_COLLECTION, $request->file('cover'), $request->removesCover());
 
         $user->save();
 
@@ -118,22 +96,25 @@ class ProfileController extends Controller
     }
 
     /**
-     * Store an uploaded profile photo and return the URL it is served from.
+     * Put one profile photo where the request asked for it to be.
      *
-     * A failed write is raised rather than shrugged off: `store` answers false
-     * when it could not write, and carrying that on into the column would
-     * leave the profile pointing at a photo that was never saved.
+     * A new photo replaces whatever was there, because the collection holds a
+     * single file — the one before it is removed from the disk rather than
+     * left behind with nothing pointing at it, which is what used to happen.
      *
-     * @throws RuntimeException
+     * A photo sent alongside a removal wins. Asking for one is the clearer of
+     * the two intents, and it is the rule the endpoint has always followed.
      */
-    protected function storePhoto(UploadedFile $photo, string $folder): string
+    protected function settlePhoto(User $user, string $collection, ?UploadedFile $photo, bool $removing): void
     {
-        $path = $photo->store($folder, self::DISK);
+        if ($photo instanceof UploadedFile) {
+            $user->addMedia($photo)->toMediaCollection($collection);
 
-        if ($path === false) {
-            throw new RuntimeException('The profile photo could not be stored.');
+            return;
         }
 
-        return url(Storage::disk(self::DISK)->url($path));
+        if ($removing) {
+            $user->clearMediaCollection($collection);
+        }
     }
 }

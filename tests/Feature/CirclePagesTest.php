@@ -239,6 +239,11 @@ test('the tracker runs the same queries however many members there are', functio
         return $count;
     };
 
+    // Measured once and discarded, for the reason given in CircleIndexTest:
+    // the reader's photo lands on the instance this test holds during the
+    // first render, and the baseline has to be taken on the same footing.
+    $measure();
+
     $few = $measure();
 
     foreach (User::factory()->count(6)->create() as $extra) {

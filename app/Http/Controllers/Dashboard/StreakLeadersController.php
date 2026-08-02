@@ -36,7 +36,9 @@ class StreakLeadersController extends Controller
             ->orderByDesc('streak_days')
             ->orderBy('full_name')
             ->limit(self::LIMIT)
-            ->get(['id', 'full_name', 'username', 'avatar_url', 'streak_days', 'longest_streak', 'last_win_on']);
+            // The photo is no longer a column to select; it comes with the row
+            // through the media the model loads alongside itself.
+            ->get(['id', 'full_name', 'username', 'streak_days', 'longest_streak', 'last_win_on']);
 
         $totals = $this->membersOnAStreak($request->user())
             ->select([

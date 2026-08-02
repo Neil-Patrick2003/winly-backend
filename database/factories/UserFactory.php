@@ -44,7 +44,6 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password_hash' => static::$password ??= Hash::make('password'),
-            'avatar_url' => null,
             'bio' => fake()->sentence(),
             'cover_gradient' => fake()->randomElement($this->gradients),
             'streak_days' => 0,

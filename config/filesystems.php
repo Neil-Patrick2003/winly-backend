@@ -53,10 +53,28 @@ return [
             'secret' => env('AWS_SECRET_ACCESS_KEY'),
             'region' => env('AWS_DEFAULT_REGION'),
             'bucket' => env('AWS_BUCKET'),
-            'url' => env('AWS_URL'),
-            'endpoint' => env('AWS_ENDPOINT'),
+            /*
+             * Falls back to null when the variable is present but empty.
+             *
+             * `AWS_URL=` in an env file reads as an empty string rather than as
+             * nothing at all, and an empty string is still a URL as far as the
+             * filesystem is concerned — every address it builds comes out as a
+             * bare path, `/media/1/photo.jpg`, with no host on the front. The
+             * bucket's own endpoint is the right answer when none is given.
+             */
+            'url' => env('AWS_URL') ?: null,
+            'endpoint' => env('AWS_ENDPOINT') ?: null,
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
-            'throw' => false,
+            /*
+             * Raised rather than swallowed, unlike the local disks.
+             *
+             * This one is across a network and behind a set of credentials, so
+             * it has ways to fail that a folder on the same machine does not —
+             * a wrong region, an expired key, a bucket policy that says no. Left
+             * silent, a write that never happened answers false and carries on,
+             * and the row ends up naming a photo that was never stored.
+             */
+            'throw' => true,
             'report' => false,
         ],
 

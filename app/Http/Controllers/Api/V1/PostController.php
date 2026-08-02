@@ -13,35 +13,24 @@ use App\Models\Circle;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
+use Spatie\MediaLibrary\MediaCollections\Filesystem;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class PostController extends Controller
 {
-    /**
-     * The disk uploaded photos and clips are written to.
-     */
-    protected const MEDIA_DISK = 'public';
-
-    /**
-     * The folder within that disk.
-     */
-    protected const MEDIA_FOLDER = 'win-media';
-
     /**
      * The author and win detail carried alongside every post row.
      *
@@ -284,7 +273,7 @@ class PostController extends Controller
          * Files are deleted after the transaction commits, never inside it.
          *
          * A rollback puts the rows back; nothing puts the bytes back. So the
-         * paths are collected while the rows go, and only unlinked once the
+         * media is collected while its rows go, and only unlinked once the
          * database has agreed to the whole edit.
          */
         $discarded = [];
@@ -316,7 +305,7 @@ class PostController extends Controller
             }
         });
 
-        $this->deleteStoredMedia($discarded);
+        $this->discardFiles($discarded);
 
         $stats->execute($request->user());
 
@@ -326,20 +315,26 @@ class PostController extends Controller
     /**
      * Take a post down.
      *
-     * The rows go by database cascade, which is also why the files have to be
-     * gathered first: a cascade fires no model events, so nothing downstream
-     * ever hears that the media is gone and the bytes would sit on the disk
-     * for ever.
+     * The win rows go by database cascade, but their media does not: the media
+     * table is tied to a win by a polymorphic pair, which cannot carry a
+     * foreign key, and a cascade fires no model events for anything downstream
+     * to notice. So the media is taken away here, by hand, or the rows would be
+     * left pointing at wins that no longer exist and the bytes would sit on the
+     * disk for ever.
      */
     public function destroy(Request $request, Post $post, RecalculateWinStats $stats): JsonResponse
     {
         Gate::authorize('delete', $post);
 
-        $discarded = $this->pathsFor(WinMedia::query()->where('post_id', $post->getKey())->get());
+        $discarded = [];
 
-        DB::transaction(fn () => $post->delete());
+        DB::transaction(function () use ($post, &$discarded): void {
+            $discarded = $this->detachMedia($this->mediaFor($post));
 
-        $this->deleteStoredMedia($discarded);
+            $post->delete();
+        });
+
+        $this->discardFiles($discarded);
 
         $stats->execute($request->user());
 
@@ -350,8 +345,8 @@ class PostController extends Controller
      * Create or update one win on a post, and settle its media.
      *
      * @param  array<string, mixed>  $win
-     * @return list<string> The stored paths this left behind, to unlink once
-     *                      the surrounding transaction has committed.
+     * @return list<Media> The files this left behind, to unlink once the
+     *                     surrounding transaction has committed.
      */
     protected function applyWin(Post $post, array $win): array
     {
@@ -389,18 +384,26 @@ class PostController extends Controller
         $removing = $win['remove_media_ids'] ?? [];
 
         if ($removing !== []) {
-            $doomed = $detail->media()->whereIn('id', $removing)->get();
-            $discarded = $this->pathsFor($doomed);
-            $detail->media()->whereIn('id', $removing)->delete();
+            $discarded = $this->detachMedia(
+                $detail->media()
+                    ->where('collection_name', $detail::MEDIA_COLLECTION)
+                    ->whereIn('uuid', $removing)
+                    ->get()
+            );
         }
 
-        // New files go after what is already there, then the whole run is
-        // renumbered to close the gaps the removals left.
-        $this->attachMedia($post, $detail, $win['media'] ?? [], ((int) $detail->media()->max('position')) + 1);
-        $this->resequenceMedia($detail);
+        // New files go after whatever survived the removals. Nothing has to be
+        // renumbered behind them: the gaps a removal leaves are gaps in an
+        // ordering column nobody reads directly, and the position a client is
+        // told is worked out from where a file sits in the run.
+        $this->attachMedia($detail, $win['media'] ?? []);
 
         // Derived rather than taken from the caller, exactly as on create.
-        $detail->update(['media_attached' => $detail->media()->exists()]);
+        $detail->update([
+            'media_attached' => $detail->media()
+                ->where('collection_name', $detail::MEDIA_COLLECTION)
+                ->exists(),
+        ]);
 
         return $discarded;
     }
@@ -408,12 +411,12 @@ class PostController extends Controller
     /**
      * Drop a kind of win from a post entirely.
      *
-     * The media has to go explicitly. `win_media` is tied to the post by
-     * foreign key and to the win only by a polymorphic pair, which cannot
-     * carry one — so deleting the win alone would leave its rows orphaned and
-     * still counted.
+     * The media is taken away first rather than left to the library, which
+     * would unlink the files the moment the win goes — inside the transaction,
+     * where a rollback could still put the rows back but nothing would bring
+     * the bytes back with them.
      *
-     * @return list<string> The stored paths this left behind.
+     * @return list<Media> The files this left behind.
      */
     protected function removeWin(Post $post, string $type): array
     {
@@ -428,73 +431,73 @@ class PostController extends Controller
             return [];
         }
 
-        $discarded = $this->pathsFor($detail->media()->get());
+        $discarded = $this->detachMedia($detail->media()->get());
 
-        $detail->media()->delete();
-        $detail->delete();
+        $detail->deletePreservingMedia();
 
         return $discarded;
     }
 
     /**
-     * Renumber a win's media from zero, keeping the order it was in.
+     * Every file hanging off a post's wins.
      *
-     * Removing the second of four photos would otherwise leave positions 0, 2,
-     * 3, and a client drawing them in position order has no way to tell that
-     * from a gap it should render.
+     * Found through the wins rather than the post, because the media table has
+     * no column naming one. Win ids are uuids and so unique across every table,
+     * which is what lets `model_id` alone say the row belongs here.
+     *
+     * @return Collection<int, Media>
      */
-    protected function resequenceMedia(WinMeditation|WinLearning|WinMovement $win): void
+    protected function mediaFor(Post $post): Collection
     {
-        $win->media()->orderBy('position')->orderBy('id')->get()
-            ->each(function (WinMedia $media, int $position): void {
-                if ($media->position !== $position) {
-                    $media->update(['position' => $position]);
-                }
-            });
+        $post->loadMissing(['winMeditation', 'winLearning', 'winMovement']);
+
+        $winIds = array_values(array_filter([
+            $post->winMeditation?->getKey(),
+            $post->winLearning?->getKey(),
+            $post->winMovement?->getKey(),
+        ]));
+
+        return Media::query()->whereIn('model_id', $winIds)->get();
     }
 
     /**
-     * The path on the media disk for each row, where one can be worked out.
+     * Take the rows for these files away, leaving the files themselves.
      *
-     * Rows store an absolute URL, which is what clients need, so getting back
-     * to a path means undoing that. Anything that does not sit under the disk's
-     * own prefix is skipped rather than guessed at — a row pointing somewhere
-     * else is not ours to delete.
+     * Deleted through the query builder deliberately. Deleting a media model
+     * fires the library's observer, which unlinks the file there and then, and
+     * every caller here is inside a transaction that has not committed yet.
+     * The rows go now; the bytes go once the database has agreed to the edit.
      *
-     * @param  Collection<int, WinMedia>  $media
-     * @return list<string>
+     * @param  Collection<int, Media>  $media
+     * @return list<Media>
      */
-    protected function pathsFor(Collection $media): array
+    protected function detachMedia(Collection $media): array
     {
-        $prefix = parse_url(Storage::disk(self::MEDIA_DISK)->url(''), PHP_URL_PATH) ?: '/';
-
-        $paths = [];
-
-        foreach ($media as $row) {
-            $path = parse_url($row->url, PHP_URL_PATH);
-
-            if (! is_string($path) || ! str_starts_with($path, $prefix)) {
-                continue;
-            }
-
-            $paths[] = ltrim(substr($path, strlen($prefix)), '/');
+        if ($media->isEmpty()) {
+            return [];
         }
 
-        return $paths;
+        Media::query()->whereKey($media->modelKeys())->delete();
+
+        return array_values($media->all());
     }
 
     /**
-     * Remove stored files, having already removed the rows that named them.
+     * Unlink files whose rows have already gone.
      *
-     * @param  list<string>  $paths
+     * @param  list<Media>  $media
      */
-    protected function deleteStoredMedia(array $paths): void
+    protected function discardFiles(array $media): void
     {
-        if ($paths === []) {
+        if ($media === []) {
             return;
         }
 
-        Storage::disk(self::MEDIA_DISK)->delete($paths);
+        $filesystem = app(Filesystem::class);
+
+        foreach ($media as $file) {
+            $filesystem->removeAllFiles($file);
+        }
     }
 
     /**
@@ -529,33 +532,32 @@ class PostController extends Controller
                 ...$shared,
                 'movement_type' => $win['movement_type'] ?? null,
             ]),
+            // Unreachable for the same reason it is on an edit: validation has
+            // already narrowed the type to one of the three. Stated so that a
+            // fourth kind added without a branch here fails loudly.
+            default => throw new InvalidArgumentException("Unknown win type [{$win['type']}]."),
         };
 
-        $this->attachMedia($post, $detail, $media);
+        $this->attachMedia($detail, $media);
     }
 
     /**
      * Store the uploaded files for one win, keeping the order they arrived in.
      *
-     * The kind is read from the file rather than taken from the caller, so a
-     * client cannot mislabel a clip as a photo.
+     * Each file is added on the end of what the win already holds, so the run
+     * reads in upload order however many edits it took to build.
+     *
+     * Nothing here records what kind of file it is. That is read back off the
+     * stored mime type when a win is rendered, which is one fewer thing to
+     * disagree with the file itself — and a client could never mislabel a clip
+     * as a photo even if it tried.
      *
      * @param  list<UploadedFile>  $media
-     * @param  int  $from  The position to start numbering at. Non-zero when
-     *                     editing, where the new files go after whatever the
-     *                     win is already holding.
      */
-    protected function attachMedia(Post $post, Model $win, array $media, int $from = 0): void
+    protected function attachMedia(WinMeditation|WinLearning|WinMovement $win, array $media): void
     {
-        foreach ($media as $offset => $file) {
-            $path = $file->store(self::MEDIA_FOLDER, self::MEDIA_DISK);
-
-            $win->media()->create([
-                'post_id' => $post->id,
-                'url' => url(Storage::disk(self::MEDIA_DISK)->url($path)),
-                'kind' => WinMedia::kindForMime($file->getMimeType()),
-                'position' => $from + $offset,
-            ]);
+        foreach ($media as $file) {
+            $win->addWinMedia($file);
         }
     }
 }

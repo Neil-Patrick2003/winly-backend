@@ -3,7 +3,7 @@
 namespace App\Concerns;
 
 use App\Models\User;
-use App\Models\WinMedia;
+use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
@@ -100,8 +100,8 @@ trait ProfileValidationRules
         return [
             'nullable',
             'file',
-            'mimetypes:'.implode(',', WinMedia::IMAGE_MIMES),
-            'max:'.WinMedia::MAX_IMAGE_KB,
+            'mimetypes:'.implode(',', MediaFile::IMAGE_MIMES),
+            'max:'.MediaFile::MAX_IMAGE_KB,
         ];
     }
 

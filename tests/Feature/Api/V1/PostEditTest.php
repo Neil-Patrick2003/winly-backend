@@ -3,13 +3,14 @@
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Rules\MediaFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 beforeEach(function () {
     Storage::fake('public');
@@ -110,7 +111,7 @@ test('a kind left out of the edit is dropped, and its files with it', function (
     $post = Post::factory()->for($this->user)->create();
     WinLearning::factory()->for($post, 'post')->create(['learned_text' => 'Something.']);
     $movement = WinMovement::factory()->for($post, 'post')->create();
-    WinMedia::factory()->forWin($movement)->create();
+    $movement->addWinMedia(UploadedFile::fake()->image('walk.jpg'));
 
     // Only the learning is named, so the movement is being removed.
     $this->patchJson(route('api.v1.posts.update', $post), [
@@ -120,12 +121,11 @@ test('a kind left out of the edit is dropped, and its files with it', function (
         ->assertJsonCount(1, 'data.wins')
         ->assertJsonPath('data.wins.0.type', 'learning');
 
-    // Scoped to this post: the media factory stands up a win of its own to
-    // hang a file on, so the global counts are not this post's business.
     expect(WinMovement::query()->where('post_id', $post->id)->count())->toBe(0)
         // The morph cannot carry a foreign key, so nothing would have cleaned
         // these up on their own.
-        ->and(WinMedia::query()->where('post_id', $post->id)->count())->toBe(0);
+        ->and(Media::query()->where('model_id', $movement->id)->count())->toBe(0)
+        ->and(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('a kind that was not there can be added', function () {
@@ -162,15 +162,15 @@ test('named media is dropped, its file deleted, and the rest renumbered', functi
         UploadedFile::fake()->image('three.jpg'),
     ]);
 
-    $media = WinMedia::query()->orderBy('position')->get();
-    expect(Storage::disk('public')->allFiles('win-media'))->toHaveCount(3);
+    $media = Media::query()->orderBy('order_column')->get();
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(3);
 
     $this->patchJson(route('api.v1.posts.update', $post), [
         'wins' => [[
             'type' => 'movement',
             'movement_type' => 'walk',
             // The middle one, so the gap it leaves has to be closed.
-            'remove_media_ids' => [$media[1]->id],
+            'remove_media_ids' => [$media[1]->uuid],
         ]],
     ])
         ->assertOk()
@@ -178,8 +178,8 @@ test('named media is dropped, its file deleted, and the rest renumbered', functi
         ->assertJsonPath('data.wins.0.media.0.position', 0)
         ->assertJsonPath('data.wins.0.media.1.position', 1);
 
-    expect(WinMedia::count())->toBe(2)
-        ->and(Storage::disk('public')->allFiles('win-media'))->toHaveCount(2);
+    expect(Media::count())->toBe(2)
+        ->and(Storage::disk('public')->allFiles('media'))->toHaveCount(2);
 });
 
 test('new files are added after the ones already there', function () {
@@ -196,7 +196,7 @@ test('new files are added after the ones already there', function () {
         ->assertJsonCount(2, 'data.wins.0.media')
         ->assertJsonPath('data.wins.0.media.1.position', 1);
 
-    expect(Storage::disk('public')->allFiles('win-media'))->toHaveCount(2);
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(2);
 });
 
 test('media belonging to another post cannot be removed through this one', function () {
@@ -205,12 +205,12 @@ test('media belonging to another post cannot be removed through this one', funct
 
     $theirs = Post::factory()->for(User::factory())->create();
     $theirWin = WinMovement::factory()->for($theirs, 'post')->create();
-    $theirMedia = WinMedia::factory()->forWin($theirWin)->create();
+    $theirMedia = $theirWin->addWinMedia(UploadedFile::fake()->image('theirs.jpg'));
 
     $this->patchJson(route('api.v1.posts.update', $mine), [
         'wins' => [[
             'type' => 'movement',
-            'remove_media_ids' => [$theirMedia->id],
+            'remove_media_ids' => [$theirMedia->uuid],
         ]],
     ])
         ->assertUnprocessable()
@@ -223,7 +223,10 @@ test('media belonging to another post cannot be removed through this one', funct
 test('the media cap counts what the win is already holding', function () {
     $post = Post::factory()->for($this->user)->create();
     $win = WinMovement::factory()->for($post, 'post')->create();
-    WinMedia::factory()->forWin($win)->count(WinMedia::MAX_PER_WIN)->create();
+
+    foreach (range(1, MediaFile::MAX_PER_WIN) as $number) {
+        $win->addWinMedia(UploadedFile::fake()->image("full-{$number}.jpg"));
+    }
 
     $this->patch(route('api.v1.posts.update', $post), [
         'wins' => [[
@@ -234,13 +237,13 @@ test('the media cap counts what the win is already holding', function () {
         ->assertUnprocessable()
         ->assertJsonValidationErrors('wins.0.media');
 
-    expect(WinMedia::count())->toBe(WinMedia::MAX_PER_WIN);
+    expect(Media::count())->toBe(MediaFile::MAX_PER_WIN);
 });
 
 test('deleting a post takes its rows and its files with it', function () {
     $post = postWithMovement([UploadedFile::fake()->image('walk.jpg')]);
 
-    expect(Storage::disk('public')->allFiles('win-media'))->toHaveCount(1);
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(1);
 
     $this->deleteJson(route('api.v1.posts.destroy', $post))
         ->assertOk()
@@ -248,10 +251,10 @@ test('deleting a post takes its rows and its files with it', function () {
 
     expect(Post::count())->toBe(0)
         ->and(WinMovement::count())->toBe(0)
-        ->and(WinMedia::count())->toBe(0)
+        ->and(Media::count())->toBe(0)
         // The database cascade fires no model events, so this is the part that
         // only happens because the controller went looking for the files.
-        ->and(Storage::disk('public')->allFiles('win-media'))->toBeEmpty();
+        ->and(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('deleting the only win of today takes the streak back down', function () {

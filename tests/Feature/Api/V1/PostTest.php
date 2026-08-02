@@ -6,13 +6,14 @@ use App\Models\Follow;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Rules\MediaFile;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 beforeEach(function () {
     Storage::fake('public');
@@ -107,8 +108,48 @@ test('uploading files marks the win as carrying media', function () {
         ->assertJsonPath('data.wins.0.media.1.position', 1);
 
     expect($response->json('data.wins.0.media.0.url'))->toStartWith('http');
-    expect(WinMedia::count())->toBe(2);
-    expect(Storage::disk('public')->allFiles('win-media'))->toHaveCount(2);
+    expect(Media::count())->toBe(2);
+    expect(Storage::disk('public')->allFiles('media'))->toHaveCount(2);
+});
+
+test('a genuine upload survives being handed to the media library', function () {
+    /*
+     * A real `UploadedFile` rather than a fake one, deliberately.
+     *
+     * `UploadedFile::fake()` answers `getMimeType()` out of a property without
+     * ever touching the disk, so it cannot notice that adding the file moves it
+     * out of its temporary path and unlinks what was there. A real upload can,
+     * and did: reading the type after handing the file over raised "the file
+     * /private/var/tmp/... does not exist or is not readable" on every win that
+     * carried a photo, with the whole suite green.
+     */
+    $path = tempnam(sys_get_temp_dir(), 'win').'.jpg';
+    $image = imagecreatetruecolor(10, 10);
+    imagejpeg($image, $path);
+    imagedestroy($image);
+
+    $win = WinMovement::factory()->create();
+
+    $media = $win->addWinMedia(new UploadedFile($path, 'walk.jpg', 'image/jpeg', null, true));
+
+    expect($media->mime_type)->toBe('image/jpeg')
+        ->and(Storage::disk('public')->allFiles('media'))->toHaveCount(1);
+});
+
+test('files land on whichever disk the media library is pointed at', function () {
+    Storage::fake('s3');
+    config(['media-library.disk_name' => 's3']);
+
+    $this->post(route('api.v1.posts.store'), [
+        'wins' => [['type' => 'movement', 'movement_type' => 'walk',
+            'media' => [UploadedFile::fake()->image('walk.jpg')]]],
+    ])->assertCreated();
+
+    // Nothing names a disk in the application itself, so pointing the library
+    // somewhere else is all it takes to move where uploads are kept.
+    expect(Media::sole()->disk)->toBe('s3')
+        ->and(Storage::disk('s3')->allFiles('media'))->toHaveCount(1)
+        ->and(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('saving a win bumps the wins count', function () {
@@ -209,18 +250,18 @@ test('an unsupported file type is rejected', function () {
     ])->assertUnprocessable()->assertJsonValidationErrors('wins.0.media.0');
 
     expect(Post::count())->toBe(0);
-    expect(Storage::disk('public')->allFiles('win-media'))->toBeEmpty();
+    expect(Storage::disk('public')->allFiles('media'))->toBeEmpty();
 });
 
 test('an oversized photo is rejected but a clip that size is fine', function () {
     $this->post(route('api.v1.posts.store'), [
         'wins' => [['type' => 'movement',
-            'media' => [UploadedFile::fake()->create('huge.jpg', WinMedia::MAX_IMAGE_KB + 1, 'image/jpeg')]]],
+            'media' => [UploadedFile::fake()->create('huge.jpg', MediaFile::MAX_IMAGE_KB + 1, 'image/jpeg')]]],
     ])->assertUnprocessable()->assertJsonValidationErrors('wins.0.media.0');
 
     $this->post(route('api.v1.posts.store'), [
         'wins' => [['type' => 'movement',
-            'media' => [UploadedFile::fake()->create('clip.mp4', WinMedia::MAX_IMAGE_KB + 1, 'video/mp4')]]],
+            'media' => [UploadedFile::fake()->create('clip.mp4', MediaFile::MAX_IMAGE_KB + 1, 'video/mp4')]]],
     ])->assertCreated();
 });
 
@@ -257,11 +298,11 @@ test('deleting a post takes the win files with it', function () {
             'media' => [UploadedFile::fake()->image('run.jpg')]]],
     ])->assertCreated();
 
-    expect(WinMedia::count())->toBe(1);
+    expect(Media::count())->toBe(1);
 
     Post::sole()->delete();
 
-    expect(WinMedia::count())->toBe(0);
+    expect(Media::count())->toBe(0);
 });
 
 test('a rejected win leaves no post behind', function () {
@@ -359,7 +400,7 @@ test('the feed runs the same number of queries however many posts it returns', f
     $seed = function (int $count): void {
         Post::factory()->count($count)->create()->each(function ($post) {
             $win = WinMovement::factory()->create(['post_id' => $post->id]);
-            WinMedia::factory()->forWin($win)->create();
+            $win->addWinMedia(UploadedFile::fake()->image('walk.jpg'));
         });
     };
 
@@ -383,13 +424,15 @@ test('the feed runs the same number of queries however many posts it returns', f
     // three win tables and their files, and the circles each post was shared
     // into. Growing the page must not add queries.
     //
-    // The budget has grown twice, each time by one eager load for the whole
-    // page rather than one per post: eight to nine when posts began carrying
-    // their circles, nine to ten when a row began saying whether the reader has
-    // saved it. The equality above is what actually guards against the per-post
-    // kind, and it is the line that must never be relaxed.
+    // The budget has grown three times, each time by one eager load for the
+    // whole page rather than one per post: eight to nine when posts began
+    // carrying their circles, nine to ten when a row began saying whether the
+    // reader has saved it, ten to eleven when the authors' photos moved to the
+    // media library and began arriving with them. The equality above is what
+    // actually guards against the per-post kind, and it is the line that must
+    // never be relaxed.
     expect($many)->toBe($few);
-    expect($few)->toBeLessThanOrEqual(10);
+    expect($few)->toBeLessThanOrEqual(11);
 });
 
 test('the feed is cursor paginated', function () {

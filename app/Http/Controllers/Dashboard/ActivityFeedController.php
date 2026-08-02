@@ -27,7 +27,7 @@ class ActivityFeedController extends Controller
     {
         $posts = $this->postsInOwnedCircles($request->user())
             ->with([
-                'user:id,full_name,username,avatar_url',
+                'user:id,full_name,username',
                 'winMeditation:id,post_id,duration_minutes',
                 'winLearning:id,post_id,learned_text',
                 'winMovement:id,post_id,movement_type',

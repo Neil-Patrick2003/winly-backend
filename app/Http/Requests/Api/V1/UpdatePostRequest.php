@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Models\Post;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -41,8 +40,6 @@ class UpdatePostRequest extends FormRequest
      */
     public function rules(): array
     {
-        $post = $this->route('post');
-
         return [
             'caption' => ['nullable', 'string', 'max:2000'],
 
@@ -60,7 +57,7 @@ class UpdatePostRequest extends FormRequest
 
             // Files being added by this edit. What is already on the win stays
             // unless its id appears in `remove_media_ids`.
-            'wins.*.media' => ['nullable', 'array', 'max:'.WinMedia::MAX_PER_WIN],
+            'wins.*.media' => ['nullable', 'array', 'max:'.MediaFile::MAX_PER_WIN],
             'wins.*.media.*' => ['required', new MediaFile],
 
             /*
@@ -69,13 +66,21 @@ class UpdatePostRequest extends FormRequest
              * The scoping is the point: without it a guessable id would let
              * somebody delete a photo from a post that is not theirs, through
              * an endpoint they are otherwise allowed to call on their own.
+             *
+             * The media table has no column naming the post, so the narrowing
+             * goes through the wins hanging off it. Their ids are uuids and so
+             * unique across every table, which is what lets `model_id` alone
+             * say the row belongs to this post.
+             *
+             * Matched on `uuid` rather than the table's own key: the key is an
+             * auto-increment the API never speaks in.
              */
             'wins.*.remove_media_ids' => ['nullable', 'array'],
             'wins.*.remove_media_ids.*' => [
                 'uuid',
                 'distinct',
-                Rule::exists('win_media', 'id')
-                    ->where('post_id', $post instanceof Post ? $post->getKey() : null),
+                Rule::exists('media', 'uuid')
+                    ->whereIn('model_id', $this->winIds()),
             ],
 
             'wins.*.duration_minutes' => [
@@ -130,17 +135,43 @@ class UpdatePostRequest extends FormRequest
             $kept = $existing === null
                 ? 0
                 : $existing->media()
-                    ->whereNotIn('id', $win['remove_media_ids'] ?? [])
+                    ->where('collection_name', $existing::MEDIA_COLLECTION)
+                    ->whereNotIn('uuid', $win['remove_media_ids'] ?? [])
                     ->count();
 
             $total = $kept + count($win['media'] ?? []);
 
-            if ($total > WinMedia::MAX_PER_WIN) {
+            if ($total > MediaFile::MAX_PER_WIN) {
                 $validator->errors()->add(
                     "wins.{$index}.media",
-                    'A win may hold at most '.WinMedia::MAX_PER_WIN.' photos or clips, and this would leave it with '.$total.'.'
+                    'A win may hold at most '.MediaFile::MAX_PER_WIN.' photos or clips, and this would leave it with '.$total.'.'
                 );
             }
         }
+    }
+
+    /**
+     * The ids of the wins hanging off the post being edited.
+     *
+     * What the media a caller may name is narrowed to. Absent wins simply drop
+     * out, so a post carrying none narrows to an empty list and nothing
+     * validates against it — which is the right answer, because a post with no
+     * wins is holding no media either.
+     *
+     * @return list<string>
+     */
+    protected function winIds(): array
+    {
+        $post = $this->route('post');
+
+        if (! $post instanceof Post) {
+            return [];
+        }
+
+        return array_values(array_filter([
+            $post->winMeditation?->getKey(),
+            $post->winLearning?->getKey(),
+            $post->winMovement?->getKey(),
+        ]));
     }
 }

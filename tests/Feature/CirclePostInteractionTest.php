@@ -6,11 +6,14 @@ use App\Models\Comment;
 use App\Models\PostLike;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
+    Storage::fake('public');
+
     $this->owner = User::factory()->create();
     $this->member = User::factory()->create(['full_name' => 'Bea Member']);
     $this->outsider = User::factory()->create();
@@ -43,11 +46,7 @@ test('a post arrives with its text, wins and files', function () {
         'reference_source' => 'https://example.com/a',
     ]);
 
-    WinMedia::factory()->forWin($meditation)->create([
-        'url' => 'https://example.com/sunrise.jpg',
-        'kind' => 'image',
-        'position' => 0,
-    ]);
+    $file = $meditation->addWinMedia(UploadedFile::fake()->image('sunrise.jpg'));
 
     $this->actingAs($this->member)
         ->get(route('circles.posts', $this->circle))
@@ -58,7 +57,8 @@ test('a post arrives with its text, wins and files', function () {
             ->where('posts.data.0.wins.0.type', 'meditation')
             ->where('posts.data.0.wins.0.detail.duration_minutes', 15)
             ->where('posts.data.0.wins.1.detail.learned_text', 'Cursor paging beats offset.')
-            ->where('posts.data.0.wins.0.media.0.url', 'https://example.com/sunrise.jpg')
+            ->where('posts.data.0.wins.0.media.0.id', $file->uuid)
+            ->where('posts.data.0.wins.0.media.0.url', url($file->getUrl()))
             ->where('posts.data.0.wins.0.media.0.kind', 'image')
         );
 });
@@ -236,6 +236,9 @@ test('listing posts runs the same queries however many there are', function () {
 
         return $count;
     };
+
+    // Measured once and discarded, for the reason given in CircleIndexTest.
+    $measure();
 
     $few = $measure();
 

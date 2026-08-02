@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Models\Post;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -56,7 +55,7 @@ class StorePostRequest extends FormRequest
 
             // Uploaded files, one array entry each. The kind is read from the
             // file itself rather than trusted from the caller.
-            'wins.*.media' => ['nullable', 'array', 'max:'.WinMedia::MAX_PER_WIN],
+            'wins.*.media' => ['nullable', 'array', 'max:'.MediaFile::MAX_PER_WIN],
             'wins.*.media.*' => ['required', new MediaFile],
 
             'wins.*.duration_minutes' => [
