@@ -14,7 +14,8 @@
         'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
     /* Headings. */
-    --font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-display:
+        'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
     /* Calls to action: Login, Continue, Publish, Start Meditation. */
     --font-action:
@@ -200,15 +201,37 @@
     --chart-4: #edc493;
     --chart-5: #e8a5b0;
 
+    /*
+     * The activity chart's three series, in the brand's own green → blue →
+     * violet order.
+     *
+     * Stepped deeper than `--chart-*` above, which are fills: as lines on white
+     * those pastels sit under the 3:1 contrast floor, and blue against violet
+     * separates by ΔE 5 — a pair full-colour readers struggle with before
+     * colour blindness is considered. These clear the lightness band, the
+     * chroma floor, adjacent-pair CVD separation and contrast.
+     */
+    --series-meditation: #3ba776;
+    --series-learning: #1f6ea8;
+    --series-movement: #a37fdb;
+
     --radius: 0.5rem;
 
-    --sidebar: #ffffff;
+    /*
+     * The rail sits a shade under the canvas with a cool green through it, so
+     * it reads as a separate surface. White would tie it to the cards instead,
+     * and the cards are what should lift off the page.
+     *
+     * The selected row goes deeper than the shared `--accent` mint: on a tinted
+     * rail the pale version all but vanishes.
+     */
+    --sidebar: #eef3f0;
     --sidebar-foreground: #16181d;
     --sidebar-primary: #2f7d52;
     --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #e9f4ec;
-    --sidebar-accent-foreground: #2a6e49;
-    --sidebar-border: #ecede8;
+    --sidebar-accent: #d9ebe1;
+    --sidebar-accent-foreground: #245f3e;
+    --sidebar-border: #dfe7e2;
     --sidebar-ring: #2f7d52;
 }
 
@@ -223,30 +246,75 @@
  * forest green on a near-black ground is a hole rather than a button.
  */
 .dark {
-    --background: #14161a;
-    --foreground: #e8eae4;
-    --card: #1c1f23;
-    --card-foreground: #e8eae4;
-    --popover: #1c1f23;
-    --popover-foreground: #e8eae4;
+    /*
+     * Surfaces are stepped by lightness, not by outline.
+     *
+     * The old ground and card sat 0.038 apart in OKLCH L — under the 0.06 a
+     * step needs to register — and the console's panels carry no border, so a
+     * card had nothing at all marking its edge. The shadows below cannot help
+     * on their own: a dark shadow on a dark ground is invisible.
+     */
+    --background: #0d100f;
+    --foreground: #e9ece7;
+    --card: #1f2422;
+    --card-foreground: #e9ece7;
+    --popover: #1f2422;
+    --popover-foreground: #e9ece7;
 
     --primary: #7fc79b;
     --primary-foreground: #08301d;
 
-    --secondary: #262a2f;
-    --secondary-foreground: #e8eae4;
-    --muted: #24282c;
-    --muted-foreground: #9ba299;
-    --accent: #1e3226;
+    --secondary: #313834;
+    --secondary-foreground: #e9ece7;
+    --muted: #2e3533;
+    --muted-foreground: #a0a8a3;
+    --accent: #24382c;
     --accent-foreground: #97d7b0;
 
-    --destructive: #d16158;
-    --destructive-foreground: #ffffff;
+    /*
+     * Lifted off the old #d16158, which read at 4.38:1 on a card — under the
+     * 4.5 body text wants. Dark ink on top rather than white, the same way the
+     * green primary carries dark text here.
+     */
+    --destructive: #e0736a;
+    --destructive-foreground: #40100c;
 
-    --border: #2c3035;
-    --divider: #3a3f45;
-    --input: #30353a;
+    --border: #2b322f;
+    --divider: #3a423e;
+    --input: #333b37;
     --ring: #7fc79b;
+
+    /*
+     * The circle washes, restated for the dark.
+     *
+     * These are the one set of tokens the light theme defines as pale fills
+     * carrying dark ink. Left alone after dark that inverts the card: a bright
+     * pastel slab across the top of a near-black panel, and a tag chip that
+     * glares. Each hue is rebuilt the way the rest of this theme works — a deep
+     * tint, stepped clear of the card, with light ink on top.
+     */
+    --color-wash-blue: #23384f;
+    --color-wash-blue-ink: #a9c9ee;
+    --color-wash-lavender: #372f56;
+    --color-wash-lavender-ink: #c8bcf2;
+    --color-wash-pink: #432934;
+    --color-wash-pink-ink: #f0b4c4;
+    --color-wash-peach: #452f1e;
+    --color-wash-peach-ink: #f0c091;
+    --color-wash-mint: #1f3b2e;
+    --color-wash-mint-ink: #9fdcbb;
+    --color-wash-butter: #3d3418;
+    --color-wash-butter-ink: #e8d18f;
+
+    /*
+     * Shadows recast in black. The light theme's indigo-tinted shade is mixed
+     * for a pale ground and disappears entirely on this one.
+     */
+    --shadow-card:
+        0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.34);
+    --shadow-raised:
+        0 2px 6px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(0, 0, 0, 0.42);
+    --shadow-float: 0 1px 2px rgba(0, 0, 0, 0.6);
 
     --chart-1: #7fbf9b;
     --chart-2: #9db9e4;
@@ -254,13 +322,26 @@
     --chart-4: #edc493;
     --chart-5: #e8a5b0;
 
-    --sidebar: #1a1d21;
-    --sidebar-foreground: #e8eae4;
+    /*
+     * Chosen against the dark card rather than lightened from the light steps:
+     * an automatic flip lands outside the band that keeps a line readable on a
+     * dark ground. Validated on #1c1f23.
+     */
+    --series-meditation: #3fa878;
+    --series-learning: #2578a6;
+    --series-movement: #9b80d2;
+
+    /*
+     * After dark the rail goes under the canvas rather than over it — the same
+     * green-cooled ink, so the cards stay the brightest thing on screen.
+     */
+    --sidebar: #070a09;
+    --sidebar-foreground: #e9ece7;
     --sidebar-primary: #7fc79b;
     --sidebar-primary-foreground: #08301d;
-    --sidebar-accent: #1e3226;
+    --sidebar-accent: #24382c;
     --sidebar-accent-foreground: #97d7b0;
-    --sidebar-border: #2c3035;
+    --sidebar-border: #1e2422;
     --sidebar-ring: #7fc79b;
 }
 
@@ -310,3 +391,19 @@
     background: color-mix(in oklab, var(--card) 72%, transparent);
     backdrop-filter: blur(20px);
 }
+
+/*
+ * A flat console surface: the card colour, a soft radius, no outline.
+ *
+ * The rest of the app draws surfaces with a hairline border. The console reads
+ * as one dense screen rather than a page of documents, and at that density a
+ * border around every panel becomes a grid of lines competing with the data
+ * inside them. The tonal step from the canvas carries the edge instead, with
+ * just enough shadow to keep it from floating free on the darker ground.
+ */
+@utility panel {
+    border-radius: var(--radius-card);
+    background-color: var(--card);
+    box-shadow: var(--shadow-card);
+}
+
