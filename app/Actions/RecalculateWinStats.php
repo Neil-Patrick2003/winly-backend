@@ -40,16 +40,23 @@ class RecalculateWinStats
              */
             $logged = $win->newQuery()
                 ->whereIn('post_id', $user->posts()->select('posts.id'))
-                ->pluck('completed_at');
+                ->pluck('completed_at')
+                // Grouped in PHP rather than by a raw `DATE()`, which reads
+                // differently across database engines. Same reasoning as the
+                // weekly progress endpoint, and the same answer as a result.
+                ->map(fn (CarbonInterface $at): string => $at->toDateString())
+                /*
+                 * A pillar counts once a day. Sitting twice on a Tuesday is
+                 * still the one Tuesday you meditated — the same Tuesday the
+                 * streak counts once and the week draws as a single ring.
+                 * Meditation, learning and movement are counted apart, so a
+                 * day of all three is still worth three.
+                 */
+                ->unique();
 
             $total += $logged->count();
 
-            // Grouped in PHP rather than by a raw `DATE()`, which reads
-            // differently across database engines. Same reasoning as the
-            // weekly progress endpoint, and the same answer as a result.
-            $days = $days->concat(
-                $logged->map(fn (CarbonInterface $at): string => $at->toDateString())
-            );
+            $days = $days->concat($logged);
         }
 
         $days = $days->unique()->sort()->values();

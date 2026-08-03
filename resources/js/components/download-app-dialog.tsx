@@ -1,4 +1,4 @@
-import { Apple, Check, Download, Lock, Smartphone } from 'lucide-react';
+import { Check, Download, Lock, Smartphone } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -28,24 +28,17 @@ const DOWNLOADS: {
     url: string | null;
 }[] = [
     {
+        key: 'pwa',
+        icon: Download,
+        name: 'Install from Chrome',
+        detail: 'Add it to your home screen, no store needed.',
+        url: 'https://welle.expo.app',
+    },
+    {
         key: 'android',
         icon: Smartphone,
         name: 'Android',
         detail: 'Phones and tablets running Android 9 or newer.',
-        url: null,
-    },
-    {
-        key: 'ios',
-        icon: Apple,
-        name: 'iPhone & iPad',
-        detail: 'Waiting on App Store review.',
-        url: null,
-    },
-    {
-        key: 'pwa',
-        icon: Download,
-        name: 'Install from the browser',
-        detail: 'Add it to your home screen, no store needed.',
         url: null,
     },
 ];
@@ -53,9 +46,10 @@ const DOWNLOADS: {
 /**
  * The ways to take the app off the browser and onto a phone.
  *
- * Every platform is listed even when it is not ready, rather than hiding what
- * is missing: someone looking for the iPhone build should find out it is
- * coming, not be left wondering whether they looked in the wrong place.
+ * Android is listed before it ships so nobody reads Chrome as the whole story.
+ * iOS is left off rather than sat under a "Coming soon" badge — there is no
+ * build and no date behind it, and a promise nobody can put a month on reads
+ * worse than saying nothing yet.
  */
 export function DownloadAppDialog({ trigger }: { trigger: ReactNode }) {
     return (
@@ -115,7 +109,11 @@ export function DownloadAppDialog({ trigger }: { trigger: ReactNode }) {
 
                                 {available ? (
                                     <Button asChild size="sm">
-                                        <a href={url}>
+                                        <a
+                                            href={url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
                                             <Check />
                                             Get it
                                         </a>

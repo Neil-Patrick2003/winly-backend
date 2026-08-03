@@ -181,7 +181,7 @@ export default function Manage({
 
                     <SettingsSection
                         title="Invite people"
-                        description="People you and they both follow. Anyone not on Winly yet needs a share link."
+                        description="People you and they both follow. Anyone not on welle yet needs a share link."
                     >
                         <form onSubmit={runSearch} className="flex gap-2">
                             <Input

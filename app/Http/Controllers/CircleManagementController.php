@@ -84,7 +84,7 @@ class CircleManagementController extends Controller
     /**
      * Ask somebody to join.
      *
-     * Only people already on Winly can be asked this way — an invitation is a
+     * Only people already on welle can be asked this way — an invitation is a
      * row against a user. Bringing somebody who has no account yet is a
      * different thing, and belongs to a share link rather than to this form.
      */

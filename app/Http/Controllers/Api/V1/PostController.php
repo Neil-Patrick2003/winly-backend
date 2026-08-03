@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
@@ -236,7 +237,8 @@ class PostController extends Controller
      * feed.
      *
      * The streak moves with the post rather than with the wins on it: posting
-     * three wins at once is still one day shown up for.
+     * three wins at once is still one day shown up for. The total moves with
+     * the wins, but only once per pillar per day — see {@see firstOfTheirDay}.
      */
     public function store(StorePostRequest $request, RecordWinStreak $streak): JsonResponse
     {
@@ -259,11 +261,17 @@ class PostController extends Controller
 
             $wins = $request->validated('wins');
 
+            /*
+             * Asked before the rows are written, so that a win being recorded
+             * right now is never mistaken for the earlier one that beat it.
+             */
+            $counting = $this->firstOfTheirDay($user, $wins);
+
             foreach ($wins as $win) {
                 $this->recordWin($post, $win);
             }
 
-            $user->increment('wins_count', count($wins));
+            $user->increment('wins_count', $counting);
 
             $streak->execute($user);
 
@@ -561,6 +569,57 @@ class PostController extends Controller
         foreach ($media as $file) {
             $filesystem->removeAllFiles($file);
         }
+    }
+
+    /**
+     * How many of these wins are the first of their kind on the day they land.
+     *
+     * A pillar counts once a day. A second sitting on a Tuesday is still
+     * posted, still in the feed and still its own row with its own photos — it
+     * just does not move the total a second time, the same way it does not
+     * move the streak or light a second ring on the week. The three pillars
+     * are counted apart, so a day of all three is still worth three.
+     *
+     * {@see RecalculateWinStats} rebuilds the total by the same rule, which is
+     * what stops an edit later disagreeing with what was counted here.
+     *
+     * @param  array<int, array<string, mixed>>  $wins
+     */
+    protected function firstOfTheirDay(User $user, array $wins): int
+    {
+        return collect($wins)
+            ->reject(function (array $win) use ($user): bool {
+                $day = Carbon::parse($win['completed_at'] ?? now());
+
+                return $this->winModel((string) $win['type'])
+                    ->newQuery()
+                    // A subquery rather than `whereHas`, as everywhere else
+                    // that asks this: the only thing wanted from the post is
+                    // who wrote it.
+                    ->whereIn('post_id', $user->posts()->select('posts.id'))
+                    ->whereBetween('completed_at', [
+                        $day->copy()->startOfDay(),
+                        $day->copy()->endOfDay(),
+                    ])
+                    ->exists();
+            })
+            ->count();
+    }
+
+    /**
+     * The model one kind of win is kept in.
+     */
+    protected function winModel(string $type): WinMeditation|WinLearning|WinMovement
+    {
+        return match ($type) {
+            'meditation' => new WinMeditation,
+            'learning' => new WinLearning,
+            'movement' => new WinMovement,
+            // Unreachable: validation has already narrowed the type to one of
+            // the three. Stated so a fourth kind added to the model without a
+            // branch here fails loudly rather than quietly counting nothing.
+            default => throw new InvalidArgumentException("Unknown win type [{$type}]."),
+        };
     }
 
     /**
