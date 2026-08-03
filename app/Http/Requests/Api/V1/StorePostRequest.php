@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Models\Post;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -36,13 +35,33 @@ class StorePostRequest extends FormRequest
             'caption' => ['nullable', 'string', 'max:2000'],
 
             /*
-             * The circles to share into, or nothing to share with everybody.
+             * Who the win is for. Required and never assumed: a default here
+             * would be this application deciding on somebody's behalf how
+             * widely to share something, and the wrong guess is not one they
+             * can take back once it has been read.
+             */
+            'visibility' => ['required', 'string', Rule::in(Post::VISIBILITIES)],
+
+            /*
+             * The circles to share into. Only meaningful — and only accepted —
+             * when the caller asked to pick them.
+             *
+             * Rejected outright for the other two rather than ignored: a client
+             * sending circles alongside `public` has misunderstood something,
+             * and quietly dropping the list would leave it believing a win went
+             * somewhere it did not.
              *
              * Each is narrowed to circles the caller is actually in: posting
              * into a group you are not part of is not a thing to allow just
              * because the id was guessable.
              */
-            'circle_ids' => ['nullable', 'array', 'max:50'],
+            'circle_ids' => [
+                Rule::requiredIf(fn (): bool => $this->input('visibility') === Post::VISIBILITY_CUSTOM),
+                'prohibited_unless:visibility,'.Post::VISIBILITY_CUSTOM,
+                'array',
+                'min:1',
+                'max:50',
+            ],
             'circle_ids.*' => [
                 'uuid',
                 'distinct',
@@ -56,7 +75,7 @@ class StorePostRequest extends FormRequest
 
             // Uploaded files, one array entry each. The kind is read from the
             // file itself rather than trusted from the caller.
-            'wins.*.media' => ['nullable', 'array', 'max:'.WinMedia::MAX_PER_WIN],
+            'wins.*.media' => ['nullable', 'array', 'max:'.MediaFile::MAX_PER_WIN],
             'wins.*.media.*' => ['required', new MediaFile],
 
             'wins.*.duration_minutes' => [

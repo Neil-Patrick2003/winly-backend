@@ -123,6 +123,7 @@ export type TrackerRow = {
     longest_streak: number;
     /** Every win type is present; a kind they have not done is 0. */
     wins: Record<WinType, number>;
+    /** Days with at least one win in range — not the sum of `wins`. */
     total: number;
 };
 

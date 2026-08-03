@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProgressController;
 use App\Http\Controllers\Api\V1\PushTokenController;
+use App\Http\Controllers\Api\V1\SavedPostController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
 use App\Http\Resources\Api\V1\UserResource;
@@ -32,8 +33,9 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
             ->name('logout');
 
-        Route::get('user', fn (Request $request) => new UserResource($request->user()->loadActiveStory()->loadCount('posts')))
-            ->name('user');
+        Route::get('user', fn (Request $request) => new UserResource(
+            $request->user()->loadActiveStory()->loadNewStoryActivity()->loadCount('posts')
+        ))->name('user');
 
         Route::get('stories', [StoryController::class, 'index'])
             ->name('stories.index');
@@ -75,6 +77,10 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
 
         Route::get('circles/{circle}', [CircleController::class, 'show'])
             ->name('circles.show');
+
+        Route::patch('circles/{circle}', [CircleController::class, 'update'])
+            ->middleware('throttle:60,1')
+            ->name('circles.update');
 
         Route::delete('circles/{circle}', [CircleController::class, 'destroy'])
             ->name('circles.destroy');
@@ -137,6 +143,12 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
             ->middleware('throttle:120,1')
             ->name('notifications.read');
 
+        // Above the wildcard delete for the same reason `posts/saved` sits
+        // above `posts/{post}` — a bare `{notification}` would claim the word.
+        Route::post('notifications/{notification}/read', [NotificationController::class, 'markOneRead'])
+            ->middleware('throttle:240,1')
+            ->name('notifications.read.one');
+
         Route::delete('notifications/{notification}', [NotificationController::class, 'destroy'])
             ->middleware('throttle:120,1')
             ->name('notifications.destroy');
@@ -163,12 +175,31 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('posts', [PostController::class, 'index'])
             ->name('posts.index');
 
+        // Above `posts/{post}`, or the wildcard claims the word "saved" and
+        // answers with a 404 for a post by that id.
+        Route::get('posts/saved', [PostController::class, 'saved'])
+            ->name('posts.saved');
+
         Route::get('posts/{post}', [PostController::class, 'show'])
             ->name('posts.show');
 
         Route::post('posts', [PostController::class, 'store'])
             ->middleware('throttle:30,1')
             ->name('posts.store');
+
+        /*
+         * An edit can carry replacement photos, and a multipart body only
+         * arrives intact on a POST. Clients send one with `_method=PATCH`,
+         * which Laravel resolves before routing — so this stays a PATCH and
+         * the uploads still work.
+         */
+        Route::patch('posts/{post}', [PostController::class, 'update'])
+            ->middleware('throttle:30,1')
+            ->name('posts.update');
+
+        Route::delete('posts/{post}', [PostController::class, 'destroy'])
+            ->middleware('throttle:30,1')
+            ->name('posts.destroy');
 
         Route::get('profile', [ProfileController::class, 'me'])
             ->name('profile.show');
@@ -200,6 +231,14 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::put('posts/{post}/like', [PostLikeController::class, 'store'])
             ->middleware('throttle:120,1')
             ->name('posts.like');
+
+        Route::put('posts/{post}/save', [SavedPostController::class, 'store'])
+            ->middleware('throttle:60,1')
+            ->name('posts.save');
+
+        Route::delete('posts/{post}/save', [SavedPostController::class, 'destroy'])
+            ->middleware('throttle:60,1')
+            ->name('posts.unsave');
 
         Route::delete('posts/{post}/like', [PostLikeController::class, 'destroy'])
             ->middleware('throttle:120,1')

@@ -20,7 +20,6 @@ class StoryFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'image_url' => 'https://cdn.winly.test/stories/'.fake()->unique()->slug(3).'.jpg',
             'caption' => fake()->sentence(6),
             'expires_at' => now()->addHours(Story::LIFETIME_HOURS),
         ];

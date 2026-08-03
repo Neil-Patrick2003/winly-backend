@@ -113,6 +113,39 @@ test('the tracker counts each kind of win a member has shared', function () {
         );
 });
 
+test('the total counts days logged, not wins stacked into one day', function () {
+    // Four wins, three of them on the same day — two of those the same kind,
+    // so both the per-table dedupe and the union across tables are exercised.
+    shareWin($this->circle, $this->member, 'meditation', today()->setTime(7, 0));
+    shareWin($this->circle, $this->member, 'meditation', today()->setTime(12, 15));
+    shareWin($this->circle, $this->member, 'movement', today()->setTime(18, 30));
+    shareWin($this->circle, $this->member, 'learning', today()->subDays(3));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.wins.meditation', 2)
+            ->where('members.data.1.wins.movement', 1)
+            ->where('members.data.1.wins.learning', 1)
+            ->where('members.data.1.total', 2)
+        );
+});
+
+test('days outside the range are not counted in the total', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today()->subDays(20));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->subDays(6)->toDateString(),
+            'to' => today()->toDateString(),
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('members.data.1.total', 1));
+});
+
 test('a kind nobody has done still gets a column, at zero', function () {
     $this->actingAs($this->member)
         ->get(route('circles.tracker', $this->circle))
@@ -238,6 +271,11 @@ test('the tracker runs the same queries however many members there are', functio
 
         return $count;
     };
+
+    // Measured once and discarded, for the reason given in CircleIndexTest:
+    // the reader's photo lands on the instance this test holds during the
+    // first render, and the baseline has to be taken on the same footing.
+    $measure();
 
     $few = $measure();
 

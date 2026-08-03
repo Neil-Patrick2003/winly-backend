@@ -13,7 +13,7 @@ export default function AppLogo() {
                     {name}
                 </span>
                 <span className="truncate text-[11px] leading-tight text-muted-foreground">
-                    Admin console
+                    Owner console
                 </span>
             </div>
         </>

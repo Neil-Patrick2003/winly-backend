@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Api\V1;
 
-use App\Models\WinMedia;
+use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -24,9 +24,9 @@ class StoreStoryRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * Photos only: the table holds a single `image_url` with nothing to say
-     * what kind of file it is, so a clip would arrive with no way for a client
-     * to know to play it rather than show it.
+     * Photos only: a story is served as a single `image_url` with nothing
+     * alongside it saying what kind of file it is, so a clip would arrive with
+     * no way for a client to know to play it rather than show it.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -36,8 +36,8 @@ class StoreStoryRequest extends FormRequest
             'image' => [
                 'required',
                 'file',
-                'mimetypes:'.implode(',', WinMedia::IMAGE_MIMES),
-                'max:'.WinMedia::MAX_IMAGE_KB,
+                'mimetypes:'.implode(',', MediaFile::IMAGE_MIMES),
+                'max:'.MediaFile::MAX_IMAGE_KB,
             ],
             'caption' => ['nullable', 'string', 'max:'.self::MAX_CAPTION_LENGTH],
         ];

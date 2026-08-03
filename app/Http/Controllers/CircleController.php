@@ -12,12 +12,11 @@ use App\Models\Comment;
 use App\Models\Post;
 use App\Models\User;
 use App\Models\WinLearning;
-use App\Models\WinMedia;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Rules\MediaFile;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +26,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\MediaLibrary\MediaCollections\Models\Collections\MediaCollection;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\QueryBuilder\AllowedFilter;
 use Spatie\QueryBuilder\QueryBuilder;
 
@@ -307,7 +308,7 @@ class CircleController extends Controller
                     'duration_minutes' => $post->winMeditation->duration_minutes,
                     'completed' => $post->winMeditation->completed,
                 ],
-                'media' => $this->media($post->winMeditation->media),
+                'media' => $this->media($post->winMeditation->winMedia()),
             ];
         }
 
@@ -318,7 +319,7 @@ class CircleController extends Controller
                     'learned_text' => $post->winLearning->learned_text,
                     'reference_source' => $post->winLearning->reference_source,
                 ],
-                'media' => $this->media($post->winLearning->media),
+                'media' => $this->media($post->winLearning->winMedia()),
             ];
         }
 
@@ -328,7 +329,7 @@ class CircleController extends Controller
                 'detail' => [
                     'movement_type' => $post->winMovement->movement_type,
                 ],
-                'media' => $this->media($post->winMovement->media),
+                'media' => $this->media($post->winMovement->winMedia()),
             ];
         }
 
@@ -342,18 +343,23 @@ class CircleController extends Controller
      * models share their media through a concern, and a trait is not something
      * a parameter can be typed against.
      *
-     * @param  Collection<int, WinMedia>  $media
+     * @param  MediaCollection<int, Media>  $media
      * @return list<array<string, mixed>>
      */
-    protected function media(Collection $media): array
+    protected function media(MediaCollection $media): array
     {
-        return array_values($media
-            ->map(fn (WinMedia $file): array => [
-                'id' => $file->id,
-                'url' => $file->url,
-                'kind' => $file->kind,
-            ])
-            ->all());
+        $files = [];
+
+        foreach ($media as $file) {
+            $files[] = [
+                'id' => $file->uuid,
+                // Absolute, for the same reason the API's own payload is.
+                'url' => url($file->getUrl()),
+                'kind' => MediaFile::kindForMime($file->mime_type),
+            ];
+        }
+
+        return $files;
     }
 
     /**
@@ -390,14 +396,12 @@ class CircleController extends Controller
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        $counts = $this->winCounts(
-            $circle,
-            array_values($members->getCollection()
-                ->map(fn (CircleMembership $membership): string => $membership->user_id)
-                ->all()),
-            $request->from(),
-            $request->to(),
-        );
+        $userIds = array_values($members->getCollection()
+            ->map(fn (CircleMembership $membership): string => $membership->user_id)
+            ->all());
+
+        $counts = $this->winCounts($circle, $userIds, $request->from(), $request->to());
+        $daysLogged = $this->daysLogged($circle, $userIds, $request->from(), $request->to());
 
         return Inertia::render('circles/tracker', [
             'circle' => $this->circleProps($request, $circle),
@@ -405,7 +409,7 @@ class CircleController extends Controller
             'from' => $request->from()->toDateString(),
             'to' => $request->to()->toDateString(),
             'days' => $request->days(),
-            'members' => $members->through(function (CircleMembership $membership) use ($counts): array {
+            'members' => $members->through(function (CircleMembership $membership) use ($counts, $daysLogged): array {
                 $wins = $counts[$membership->user_id] ?? [];
 
                 return [
@@ -420,7 +424,7 @@ class CircleController extends Controller
                             $type => (int) ($wins[$type] ?? 0),
                         ])
                         ->all(),
-                    'total' => array_sum($wins),
+                    'total' => $daysLogged[$membership->user_id] ?? 0,
                 ];
             }),
         ]);
@@ -478,6 +482,63 @@ class CircleController extends Controller
         }
 
         return $counts;
+    }
+
+    /**
+     * On how many days each of these people logged extreme self care here.
+     *
+     * Deliberately not the sum of the win columns: three wins on one Tuesday is
+     * still one day of showing up, and the last column of the tracker is about
+     * how often somebody turned up rather than how much they stacked into a
+     * single day. Counting sums would let one busy afternoon outrank a month of
+     * steady practice.
+     *
+     * Days are read off `completed_at`, the same field the columns filter on,
+     * so a sitting done on Sunday and shared on Monday counts for Sunday. The
+     * three detail tables cannot be counted together, so each contributes its
+     * dates and the union is taken in PHP — a day with a sitting and a run on
+     * it must not count twice.
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, int> Keyed by user.
+     */
+    protected function daysLogged(Circle $circle, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    {
+        if ($userIds === []) {
+            return [];
+        }
+
+        /** @var array<string, array<string, true>> $seen */
+        $seen = [];
+
+        $winModels = [new WinMeditation, new WinLearning, new WinMovement];
+
+        foreach ($winModels as $model) {
+            $table = $model->getTable();
+            $posts = (new Post)->getTable();
+
+            $rows = $model->newQuery()
+                ->join($posts, "{$posts}.id", '=', "{$table}.post_id")
+                ->whereExists(fn (BaseBuilder $shared) => $shared
+                    ->from('circle_post')
+                    ->whereColumn('circle_post.post_id', "{$posts}.id")
+                    ->where('circle_post.circle_id', $circle->getKey()))
+                ->whereIn("{$posts}.user_id", $userIds)
+                ->whereBetween("{$table}.completed_at", [$from, $to])
+                ->select([
+                    "{$posts}.user_id",
+                    DB::raw("date({$table}.completed_at) as logged_on"),
+                ])
+                ->distinct()
+                ->toBase()
+                ->get();
+
+            foreach ($rows as $row) {
+                $seen[$row->user_id][$row->logged_on] = true;
+            }
+        }
+
+        return array_map(fn (array $days): int => count($days), $seen);
     }
 
     /**

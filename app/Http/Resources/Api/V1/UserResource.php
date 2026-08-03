@@ -26,6 +26,8 @@ class UserResource extends JsonResource
             'avatar_url' => $this->avatar_url,
             'bio' => $this->bio,
             'cover_gradient' => $this->cover_gradient,
+            // Null until one is uploaded; the gradient is what shows until then.
+            'cover_url' => $this->cover_url,
             // The streak still standing rather than the stored column, so this
             // and the profile endpoint never disagree about the same user.
             'streak_days' => $this->currentStreak(),
@@ -40,6 +42,17 @@ class UserResource extends JsonResource
             'is_admin' => $this->is_admin,
             'has_active_story' => $this->whenHas(
                 'has_active_story',
+                fn (mixed $value): bool => (bool) $value,
+            ),
+            /*
+             * Whether there is anything new about your own story — one just
+             * posted, or somebody having watched since you last looked.
+             *
+             * Yours alone: this is only ever loaded for the signed-in user,
+             * and nobody else has business asking it about you.
+             */
+            'has_new_story_activity' => $this->whenHas(
+                'has_new_story_activity',
                 fn (mixed $value): bool => (bool) $value,
             ),
             'last_active_at' => $this->last_active_at?->toIso8601String(),

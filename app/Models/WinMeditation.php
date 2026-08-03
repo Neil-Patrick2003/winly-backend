@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\MediaLibrary\HasMedia;
 
 /**
  * A meditation win: how long the timer ran, and whether it was seen through.
@@ -25,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property-read Post $post
  */
 #[Fillable(['post_id', 'duration_minutes', 'completed', 'media_attached', 'completed_at'])]
-class WinMeditation extends Model
+class WinMeditation extends Model implements HasMedia
 {
     /** @use HasFactory<WinMeditationFactory> */
     use HasFactory, HasUuids, HasWinMedia;

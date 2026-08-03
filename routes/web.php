@@ -2,6 +2,15 @@
 
 use App\Http\Controllers\CircleController;
 use App\Http\Controllers\CircleManagementController;
+use App\Http\Controllers\Dashboard\ActivityFeedController;
+use App\Http\Controllers\Dashboard\ActivityOverviewController;
+use App\Http\Controllers\Dashboard\CirclesStatController;
+use App\Http\Controllers\Dashboard\DailyPostsStatController;
+use App\Http\Controllers\Dashboard\EngagementStatController;
+use App\Http\Controllers\Dashboard\MemberOverviewController;
+use App\Http\Controllers\Dashboard\MembersStatController;
+use App\Http\Controllers\Dashboard\MyCirclesController;
+use App\Http\Controllers\Dashboard\StreakLeadersController;
 use App\Http\Controllers\PostCommentController;
 use App\Http\Controllers\PostLikeController;
 use Illuminate\Support\Facades\Route;
@@ -9,7 +18,25 @@ use Illuminate\Support\Facades\Route;
 Route::inertia('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    /*
+     * The console page ships no data of its own. Each tile fetches from its own
+     * endpoint, so one slow aggregate delays a single tile instead of the page,
+     * and a tile can be refreshed without reloading the rest.
+     */
     Route::inertia('dashboard', 'dashboard')->name('dashboard');
+
+    Route::prefix('dashboard/stats')->as('dashboard.stats.')->group(function () {
+        Route::get('circles', CirclesStatController::class)->name('circles');
+        Route::get('members', MembersStatController::class)->name('members');
+        Route::get('posts', DailyPostsStatController::class)->name('posts');
+        Route::get('engagement', EngagementStatController::class)->name('engagement');
+
+        Route::get('overview', ActivityOverviewController::class)->name('overview');
+        Route::get('member-overview', MemberOverviewController::class)->name('member-overview');
+        Route::get('my-circles', MyCirclesController::class)->name('my-circles');
+        Route::get('streak-leaders', StreakLeadersController::class)->name('streak-leaders');
+        Route::get('activity', ActivityFeedController::class)->name('activity');
+    });
 
     Route::get('circles', [CircleController::class, 'index'])->name('circles.index');
     Route::post('circles', [CircleController::class, 'store'])

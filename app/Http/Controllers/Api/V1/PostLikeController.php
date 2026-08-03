@@ -9,6 +9,7 @@ use App\Models\Post;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 class PostLikeController extends Controller
 {
@@ -20,6 +21,11 @@ class PostLikeController extends Controller
      */
     public function store(Request $request, Post $post, RecordNotification $notify): JsonResponse
     {
+        // Nothing you cannot read is yours to react to — and a like notifies
+        // the author, so without this a stranger could tap on a circle win and
+        // announce themselves to somebody who never shared it with them.
+        Gate::authorize('view', $post);
+
         $created = DB::transaction(function () use ($request, $post): bool {
             $like = $post->likes()->firstOrCreate([
                 'user_id' => $request->user()->id,

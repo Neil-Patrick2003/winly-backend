@@ -18,20 +18,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
 
 class StoryController extends Controller
 {
-    /**
-     * The disk story photos are written to.
-     */
-    protected const DISK = 'public';
-
-    /**
-     * The folder within that disk.
-     */
-    protected const FOLDER = 'stories';
-
     /**
      * The stories worth showing this reader, grouped by who posted them.
      *
@@ -107,12 +96,19 @@ class StoryController extends Controller
      * that loses track may say so again without consequence. Watching your own
      * story does not count — the unique index would allow it, but a view count
      * that includes the poster is not what anyone means by one.
+     *
+     * It does settle the ring, though. Watching your own story is the ordinary
+     * way of catching up on it: you have now seen what is up there, so there is
+     * nothing left to tell you about it and the colour comes off. Anybody
+     * watching after this lights it again, which is the whole point of it.
      */
     public function view(Request $request, Story $story): JsonResponse
     {
         $viewer = $request->user();
 
-        if (! $story->user->is($viewer)) {
+        if ($story->user->is($viewer)) {
+            $story->forceFill(['viewers_checked_at' => now()])->save();
+        } else {
             StoryView::firstOrCreate(
                 ['story_id' => $story->getKey(), 'viewer_id' => $viewer->getKey()],
                 ['viewed_at' => now()],
@@ -139,6 +135,17 @@ class StoryController extends Controller
     public function viewers(IndexStoryViewRequest $request, Story $story): AnonymousResourceCollection
     {
         Gate::authorize('viewers', $story);
+
+        /*
+         * Looking at the list is what "checked" means, so it is stamped here.
+         *
+         * Written before the rows are read rather than after: a watcher who
+         * arrives while this page is being built has not been seen by anybody,
+         * and stamping afterwards would take the ring down on a view that was
+         * never actually looked at. Erring towards showing it again is the
+         * harmless direction to be wrong in.
+         */
+        $story->forceFill(['viewers_checked_at' => now()])->save();
 
         $reader = $request->user();
 
@@ -182,13 +189,18 @@ class StoryController extends Controller
      */
     public function store(StoreStoryRequest $request): JsonResponse
     {
-        $path = $request->file('image')->store(self::FOLDER, self::DISK);
-
+        /*
+         * The row goes first and the file hangs off it, rather than the file
+         * being written and its address dropped into a column. The story is
+         * what the photo belongs to, and there is no story to belong to until
+         * it exists.
+         */
         $story = $request->user()->stories()->create([
-            'image_url' => url(Storage::disk(self::DISK)->url($path)),
             'caption' => $request->validated('caption'),
             'expires_at' => now()->addHours(Story::LIFETIME_HOURS),
         ]);
+
+        $story->addMedia($request->file('image'))->toMediaCollection(Story::IMAGE_COLLECTION);
 
         return (new StoryResource($story))
             ->response()

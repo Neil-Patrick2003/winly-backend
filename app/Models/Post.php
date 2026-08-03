@@ -25,13 +25,14 @@ use Illuminate\Support\Carbon;
  * @property string $user_id
  * @property string|null $caption
  * @property int $likes_count
+ * @property string $visibility
  * @property int $comments_count
  * @property int $shares_count
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
  */
-#[Fillable(['user_id', 'caption', 'likes_count', 'comments_count', 'shares_count'])]
+#[Fillable(['user_id', 'caption', 'visibility', 'likes_count', 'comments_count', 'shares_count'])]
 class Post extends Model
 {
     /** @use HasFactory<PostFactory> */
@@ -43,6 +44,65 @@ class Post extends Model
      * @var list<string>
      */
     public const WIN_TYPES = ['meditation', 'learning', 'movement'];
+
+    /**
+     * Anyone at all, and placed in no circle.
+     */
+    public const VISIBILITY_PUBLIC = 'public';
+
+    /**
+     * The circles its author was in when they posted it.
+     *
+     * Resolved to a list at the moment of writing rather than followed live.
+     * Joining a circle next week does not hand it last week's wins: what was
+     * shared is what was shared, and an audience that widened on its own would
+     * be a promise quietly broken.
+     */
+    public const VISIBILITY_ALL_CIRCLES = 'all_circles';
+
+    /**
+     * The circles its author picked.
+     */
+    public const VISIBILITY_CUSTOM = 'custom';
+
+    /**
+     * Every answer to "who is this for".
+     *
+     * `all_circles` and `custom` are one rule wearing two names — both reach
+     * the members of the circles the post was shared into. They are kept apart
+     * so an edit screen can show the choice that was made rather than working
+     * it back out of the list, which stops being possible the moment the author
+     * joins or leaves a circle.
+     *
+     * @var list<string>
+     */
+    public const VISIBILITIES = [
+        self::VISIBILITY_PUBLIC,
+        self::VISIBILITY_ALL_CIRCLES,
+        self::VISIBILITY_CUSTOM,
+    ];
+
+    /**
+     * Take the wins' media with the post.
+     *
+     * The win rows go by database cascade, but their media cannot: it hangs off
+     * a win by a polymorphic pair, which carries no foreign key, and a cascade
+     * fires no events for anything to listen for. Without this a deleted post
+     * would leave rows pointing at wins that no longer exist.
+     *
+     * The API's own delete has already taken the media away by the time this
+     * runs — it does so before committing, so that the files are only unlinked
+     * once the deletion is certain. This is for every other way a post can go:
+     * a factory, the console, a cleanup script.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Post $post): void {
+            foreach ([$post->winMeditation, $post->winLearning, $post->winMovement] as $win) {
+                $win?->deleteAllMedia();
+            }
+        });
+    }
 
     /**
      * The model's default attribute values.
@@ -131,6 +191,33 @@ class Post extends Model
     }
 
     /**
+     * Everyone who has kept this post to come back to.
+     *
+     * Nobody is ever shown this, and nothing counts it — a save is private to
+     * whoever made it. It exists so the rows go when the post does.
+     *
+     * @return HasMany<SavedPost, $this>
+     */
+    public function saves(): HasMany
+    {
+        return $this->hasMany(SavedPost::class);
+    }
+
+    /**
+     * Whether the person reading has kept this post, as their own row.
+     *
+     * Unconstrained this is simply the first save on the post, so — like
+     * `viewerLike` — it is only meaningful eager loaded against one user. The
+     * unique index on (user_id, post_id) guarantees there is at most one.
+     *
+     * @return HasOne<SavedPost, $this>
+     */
+    public function viewerSave(): HasOne
+    {
+        return $this->hasOne(SavedPost::class);
+    }
+
+    /**
      * The comments left on this post.
      *
      * @return HasMany<Comment, $this>
@@ -171,15 +258,78 @@ class Post extends Model
     }
 
     /**
-     * Limit posts to those written by the given users.
+     * Limit posts to those written by people the reader follows.
+     *
+     * A subquery rather than a plucked list of ids: somebody following
+     * thousands of people would otherwise pull every one of those ids into
+     * memory to ask a question the database can answer on its own.
      *
      * @param  Builder<Post>  $query
-     * @param  list<string>  $userIds
      */
     #[Scope]
-    protected function authoredBy(Builder $query, array $userIds): void
+    protected function followedBy(Builder $query, User $reader): void
     {
-        $query->whereIn('user_id', $userIds);
+        $query->whereIn('user_id', $reader->following()->getQuery()->select('users.id'));
+    }
+
+    /**
+     * Limit posts to those this reader is allowed to see at all.
+     *
+     * The privacy boundary, and the one scope that is not about how a reader
+     * wants to arrive at a post but about whether it is theirs to read. Three
+     * ways in, and a post needs only one of them:
+     *
+     * - it is public, so there is nobody it is being kept from;
+     * - the reader wrote it, which no amount of un-sharing takes away;
+     * - the reader is in a circle it was shared into.
+     *
+     * `whereHas` rather than a join, for the reason `inCirclesOf` gives: a post
+     * in three of the reader's circles must still come back once.
+     *
+     * Every read of a post goes through this. A path that forgets it does not
+     * fail loudly — it quietly hands somebody a win that was not meant for
+     * them, which is why the tests check each one by name.
+     *
+     * @param  Builder<Post>  $query
+     */
+    #[Scope]
+    protected function visibleTo(Builder $query, User $reader): void
+    {
+        $query->where(function (Builder $allowed) use ($reader): void {
+            $allowed
+                ->where($allowed->qualifyColumn('visibility'), self::VISIBILITY_PUBLIC)
+                ->orWhere($allowed->qualifyColumn('user_id'), $reader->getKey())
+                ->orWhereHas('circles', fn (Builder $circles) => $circles->whereIn(
+                    'circles.id',
+                    $reader->circles()->getQuery()->select('circles.id')
+                ));
+        });
+    }
+
+    /**
+     * Whether this post is one anybody may read.
+     */
+    public function isPublic(): bool
+    {
+        return $this->visibility === self::VISIBILITY_PUBLIC;
+    }
+
+    /**
+     * Limit posts to those shared into any circle the reader belongs to.
+     *
+     * `whereHas` rather than a join, because a post shared into three circles a
+     * reader is in must still come back once — a join would hand it over three
+     * times and the feed would repeat it.
+     *
+     * @param  Builder<Post>  $query
+     */
+    #[Scope]
+    protected function inCirclesOf(Builder $query, User $reader): void
+    {
+        $query->whereHas('circles', fn (Builder $circles) => $circles->whereIn(
+            'circles.id',
+            $reader->circles()->getQuery()->select('circles.id')
+        ));
     }
 
     /**

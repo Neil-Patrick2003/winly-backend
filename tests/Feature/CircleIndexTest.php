@@ -120,6 +120,16 @@ test('the list runs the same queries however many circles there are', function (
         return $count;
     };
 
+    /*
+     * Measured once and thrown away first. `actingAs` hands the guard a model
+     * this test already holds, so the reader's own photo is loaded onto it by
+     * the first render and is already there for the second — an asymmetry of
+     * the test rather than of the page, which resolves its reader from the
+     * database and carries the photo with it. The baseline is taken after,
+     * so what is compared is two renders on the same footing.
+     */
+    $measure();
+
     $few = $measure();
 
     foreach (range(1, 5) as $index) {

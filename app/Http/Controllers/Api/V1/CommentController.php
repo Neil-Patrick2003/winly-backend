@@ -31,6 +31,11 @@ class CommentController extends Controller
      */
     public function index(IndexCommentRequest $request, Post $post): AnonymousResourceCollection
     {
+        // A thread is part of the post. Being handed the id of a win shared
+        // into a circle somebody is not in must not let them read what was
+        // said under it.
+        Gate::authorize('view', $post);
+
         $viewer = $request->user();
 
         $comments = $post->comments()
@@ -53,6 +58,8 @@ class CommentController extends Controller
         Post $post,
         RecordNotification $notify,
     ): JsonResponse {
+        Gate::authorize('view', $post);
+
         $comment = DB::transaction(function () use ($request, $post): Comment {
             $comment = $post->comments()->create([
                 'user_id' => $request->user()->id,

@@ -21,6 +21,9 @@ class PostFactory extends Factory
         return [
             'user_id' => User::factory(),
             'caption' => fake()->sentence(10),
+            // Public by default so a factory post is readable by whoever the
+            // test is acting as. A test about the boundary itself says so.
+            'visibility' => Post::VISIBILITY_PUBLIC,
             'likes_count' => 0,
             'comments_count' => 0,
             'shares_count' => 0,

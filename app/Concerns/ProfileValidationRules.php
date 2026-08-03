@@ -3,7 +3,7 @@
 namespace App\Concerns;
 
 use App\Models\User;
-use App\Models\WinMedia;
+use App\Rules\MediaFile;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Validation\Rule;
 
@@ -100,9 +100,23 @@ trait ProfileValidationRules
         return [
             'nullable',
             'file',
-            'mimetypes:'.implode(',', WinMedia::IMAGE_MIMES),
-            'max:'.WinMedia::MAX_IMAGE_KB,
+            'mimetypes:'.implode(',', MediaFile::IMAGE_MIMES),
+            'max:'.MediaFile::MAX_IMAGE_KB,
         ];
+    }
+
+    /**
+     * Get the validation rules used to validate an uploaded cover photo.
+     *
+     * The same rules an avatar gets. A cover is shown far wider than a profile
+     * photo, but it is the same kind of file and holding it to a different
+     * ceiling would only make one of the two limits a surprise.
+     *
+     * @return array<int, ValidationRule|array<mixed>|string>
+     */
+    protected function coverPhotoRules(): array
+    {
+        return $this->avatarRules();
     }
 
     /**

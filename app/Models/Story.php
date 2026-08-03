@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\ServesMediaUrls;
 use App\Policies\StoryPolicy;
 use Database\Factories\StoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -15,28 +16,46 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * @property string $id
  * @property string $user_id
- * @property string $image_url
+ * @property-read string|null $image_url
  * @property string|null $caption
  * @property Carbon $expires_at
+ * @property Carbon|null $viewers_checked_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read User $user
  */
-#[Fillable(['user_id', 'image_url', 'caption', 'expires_at'])]
+#[Fillable(['user_id', 'caption', 'expires_at'])]
 #[UsePolicy(StoryPolicy::class)]
-class Story extends Model
+class Story extends Model implements HasMedia
 {
     /** @use HasFactory<StoryFactory> */
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, InteractsWithMedia, ServesMediaUrls;
 
     /**
      * How long a story stays visible after posting, in hours.
      */
     public const LIFETIME_HOURS = 24;
+
+    /**
+     * The collection a story's one photo is kept in.
+     */
+    public const IMAGE_COLLECTION = 'image';
+
+    /**
+     * Always load the photo with the story.
+     *
+     * A story is its photo, so every list of stories reads `image_url` for
+     * every row. Loading it on demand would be one query per story in a reel.
+     *
+     * @var list<string>
+     */
+    protected $with = ['media'];
 
     /**
      * Get the attributes that should be cast.
@@ -47,7 +66,28 @@ class Story extends Model
     {
         return [
             'expires_at' => 'datetime',
+            'viewers_checked_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Register the collection the photo goes in.
+     *
+     * One file, because a story is one photo. Taking the story down now takes
+     * the file with it — the library removes a model's media when the model
+     * goes, which nothing did before.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection(self::IMAGE_COLLECTION)->singleFile();
+    }
+
+    /**
+     * The address of the photo this story is.
+     */
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->mediaUrl(self::IMAGE_COLLECTION);
     }
 
     /**

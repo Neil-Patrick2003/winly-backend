@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Actions\RecalculateWinStats;
 use App\Models\Circle;
 use App\Models\CircleMembership;
 use App\Models\Comment;
@@ -138,6 +139,7 @@ class SocialGraphSeeder extends Seeder
     protected function seedWins(Collection $users): Collection
     {
         $posts = collect();
+        $stats = new RecalculateWinStats;
 
         foreach ($users as $user) {
             $combinedPost = Post::factory()->by($user)->create([
@@ -208,8 +210,14 @@ class SocialGraphSeeder extends Seeder
 
             $posts = $posts->concat([$combinedPost, $meditationPost, $learningPost, $movementPost]);
 
-            // wins_count counts wins, not posts: the combined post holds three.
-            $user->forceFill(['wins_count' => 6])->save();
+            /*
+             * Counted off the wins just written rather than stated as a number.
+             * Six rows are not six wins: everyone here meditates, learns and
+             * moves twice over the same few hours, and a pillar counts once a
+             * day. Recalculating also leaves the streak columns agreeing with
+             * the wins instead of at the factory's zero.
+             */
+            $stats->execute($user);
         }
 
         return $posts;

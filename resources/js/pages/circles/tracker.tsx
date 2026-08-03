@@ -172,7 +172,7 @@ export default function Tracker({
                                                 scope="col"
                                                 className="px-4 py-2.5 text-right text-label font-medium tracking-wide text-muted-foreground uppercase"
                                             >
-                                                Total
+                                                Total days
                                             </th>
                                         </tr>
                                     </thead>
@@ -286,8 +286,10 @@ export default function Tracker({
 
                             <p className="text-caption text-muted-foreground">
                                 A dash means none of that kind in this range.
-                                The streak counts days in a row with a win,
-                                wherever it was shared.
+                                Total days counts the days somebody logged at
+                                least one win here, so three in one day still
+                                counts once. The streak counts days in a row
+                                with a win, wherever it was shared.
                             </p>
 
                             <Pagination page={members} label="members" />

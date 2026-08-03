@@ -41,7 +41,7 @@ class SendPushNotification
 
         $messages = array_map(fn (string $token): array => [
             'to' => $token,
-            'title' => 'Winly',
+            'title' => 'welle',
             'body' => $notification->message,
             'sound' => 'default',
             /*
