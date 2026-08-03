@@ -146,6 +146,44 @@ test('days outside the range are not counted in the total', function () {
         ->assertInertia(fn ($page) => $page->where('members.data.1.total', 1));
 });
 
+test('a streak that has lapsed is not still shown as running', function () {
+    /*
+     * The columns as a win three weeks ago would have left them. `streak_days`
+     * is the run ending at that win and keeps its number for good, so reading
+     * it straight puts a one day streak against a member whose row is empty.
+     */
+    $this->member->forceFill([
+        'streak_days' => 1,
+        'longest_streak' => 4,
+        'last_win_on' => today()->subWeeks(3),
+    ])->save();
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.streak_days', 0)
+            ->where('members.data.1.total', 0)
+            // The best run is a record of something that happened, so it stays.
+            ->where('members.data.1.longest_streak', 4)
+        );
+});
+
+test('the members tab does not show a lapsed streak either', function () {
+    $this->member->forceFill([
+        'streak_days' => 2,
+        'last_win_on' => today()->subWeeks(3),
+    ])->save();
+
+    $this->actingAs($this->member)
+        ->get(route('circles.members', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.full_name', 'Bea Member')
+            ->where('members.data.1.streak_days', 0)
+        );
+});
+
 test('a kind nobody has done still gets a column, at zero', function () {
     $this->actingAs($this->member)
         ->get(route('circles.tracker', $this->circle))
@@ -237,8 +275,14 @@ test('a win shared somewhere else is not counted here', function () {
 });
 
 test('the tracker carries each members streak', function () {
-    // Not mass assignable — the streak is the streak action's to set.
-    $this->member->forceFill(['streak_days' => 12, 'longest_streak' => 30])->save();
+    // Not mass assignable — the streak is the streak action's to set. The last
+    // win comes with it, since a run is only still running while that is
+    // recent: without it these columns describe a streak that ended.
+    $this->member->forceFill([
+        'streak_days' => 12,
+        'longest_streak' => 30,
+        'last_win_on' => today(),
+    ])->save();
 
     $this->actingAs($this->member)
         ->get(route('circles.tracker', $this->circle))

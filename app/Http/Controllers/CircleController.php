@@ -221,7 +221,9 @@ class CircleController extends Controller
                 'full_name' => $membership->user->full_name,
                 'username' => $membership->user->username,
                 'avatar_url' => $membership->user->avatar_url,
-                'streak_days' => $membership->user->streak_days,
+                // The run still standing rather than the stored column, for the
+                // same reason the tracker asks this way.
+                'streak_days' => $membership->user->currentStreak(),
                 'wins_count' => $membership->user->wins_count,
                 'joined_at' => $membership->joined_at->toIso8601String(),
                 'is_owner' => $membership->user_id === $circle->owner_id,
@@ -417,7 +419,17 @@ class CircleController extends Controller
                     'full_name' => $membership->user->full_name,
                     'username' => $membership->user->username,
                     'avatar_url' => $membership->user->avatar_url,
-                    'streak_days' => $membership->user->streak_days,
+                    /*
+                     * The streak still standing, not the stored column.
+                     *
+                     * `streak_days` is the run ending at the member's last win,
+                     * whenever that was — it keeps its number long after the
+                     * run is over, which is how somebody with an empty row
+                     * ends up wearing a one day streak. `currentStreak()` is
+                     * what decides it has lapsed, and it is what the profile
+                     * and the API already answer with.
+                     */
+                    'streak_days' => $membership->user->currentStreak(),
                     'longest_streak' => $membership->user->longest_streak,
                     'wins' => collect(Post::WIN_TYPES)
                         ->mapWithKeys(fn (string $type): array => [

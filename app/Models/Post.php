@@ -46,7 +46,11 @@ class Post extends Model
     public const WIN_TYPES = ['meditation', 'learning', 'movement'];
 
     /**
-     * Anyone at all, and placed in no circle.
+     * Anyone at all, and placed in every circle its author is in.
+     *
+     * The widest of the three: it reaches the same circles `all_circles` does
+     * and is readable by everybody besides. Sharing openly does not mean
+     * withholding it from your own groups.
      */
     public const VISIBILITY_PUBLIC = 'public';
 

@@ -245,6 +245,8 @@ class PostController extends Controller
         $post = DB::transaction(function () use ($request, $streak): Post {
             $user = $request->user();
 
+            $visibility = (string) $request->validated('visibility');
+
             $post = $user->posts()->create($request->safe()->only(['caption', 'visibility']));
 
             /*
@@ -255,7 +257,7 @@ class PostController extends Controller
              */
             $post->circles()->sync($this->circlesFor(
                 $user,
-                (string) $request->validated('visibility'),
+                $visibility,
                 $request->validated('circle_ids') ?? [],
             ));
 
@@ -312,6 +314,8 @@ class PostController extends Controller
         $discarded = [];
 
         DB::transaction(function () use ($request, $post, &$discarded): void {
+            $visibility = (string) $request->validated('visibility');
+
             $post->update($request->safe()->only(['caption', 'visibility']));
 
             /*
@@ -326,7 +330,7 @@ class PostController extends Controller
              */
             $post->circles()->sync($this->circlesFor(
                 $post->user,
-                (string) $request->validated('visibility'),
+                $visibility,
                 $request->validated('circle_ids') ?? [],
             ));
 
@@ -383,14 +387,14 @@ class PostController extends Controller
     /**
      * The circles a post should sit in, given who it is for.
      *
-     * Public reaches everybody and so belongs in no circle: leaving it in one
-     * would put it on that circle's wall as though it were shared there, and
-     * the wall is meant to be what the group was actually given.
+     * Public and "all circles" put the win in the same places — every circle
+     * the author is in. They differ in who else may read it: public is open to
+     * anybody, and "all circles" is the same reach kept to members.
      *
-     * "All circles" is resolved here, once, to the circles the author is in at
-     * this moment — and then it is just a list like any other. That is what
-     * makes the setting a snapshot rather than a standing instruction: joining
-     * a circle next month cannot reach back and hand it this win.
+     * Both are resolved here, once, to the circles the author is in at this
+     * moment, and then they are just a list like any other. That is what makes
+     * the setting a snapshot rather than a standing instruction: joining a
+     * circle next month cannot reach back and hand it this win.
      *
      * @param  list<string>  $chosen  The ids named by the author, when they
      *                                picked the circles themselves.
@@ -399,8 +403,7 @@ class PostController extends Controller
     protected function circlesFor(User $author, string $visibility, array $chosen): array
     {
         return match ($visibility) {
-            Post::VISIBILITY_PUBLIC => [],
-            Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
+            Post::VISIBILITY_PUBLIC, Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
                 strval(...),
                 $author->circles()->pluck('circles.id')->all(),
             )),
