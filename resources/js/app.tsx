@@ -11,7 +11,7 @@ configureEcho({
     broadcaster: 'reverb',
 });
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'welle';
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
