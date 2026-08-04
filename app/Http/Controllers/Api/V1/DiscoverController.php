@@ -67,16 +67,24 @@ class DiscoverController extends Controller
          * morning is not three times the poster of someone who writes three
          * separate mornings, which is what ranking by it would claim.
          *
-         * Anyone with nothing posted is left out rather than padding the list:
-         * suggesting an empty account is worse than suggesting nobody, so the
-         * list runs short instead.
+         * Anyone with nothing posted is left out of the *suggestions* rather
+         * than padding them: proposing an empty account is worse than proposing
+         * nobody, so the list runs short instead.
+         *
+         * Searching is the other thing entirely. Somebody typing a name is
+         * looking for a person, not for a recommendation, and answering "no
+         * results" because that person has not posted yet is answering a
+         * question they did not ask — most of all for a friend who has only
+         * just joined, which is exactly when you go looking for them.
          */
+        $searching = filled($term);
+
         $people = User::query()
             ->whereKeyNot($viewer->getKey())
             ->whereNotIn('id', $viewer->following()->select('users.id'))
-            ->has('posts')
+            ->when(! $searching, fn (Builder $query) => $query->has('posts'))
             ->withCount('posts')
-            ->when(filled($term), function (Builder $query) use ($term): void {
+            ->when($searching, function (Builder $query) use ($term): void {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], (string) $term).'%';
 
                 $query->where(function (Builder $query) use ($like): void {

@@ -128,3 +128,50 @@ test('a search term reaches both lists', function () {
         ->and(collect($response->json('data.people'))->pluck('full_name')->all())
         ->toBe(['Sunrise Sally']);
 });
+
+/*
+ * Suggesting and searching are different questions.
+ *
+ * An empty account is not worth proposing to somebody browsing, so it stays out
+ * of the suggestions. Typing a name is not browsing: it is looking for one
+ * person, and answering "no results" because they have not posted yet is
+ * answering a question nobody asked — least of all for a friend who has only
+ * just joined, which is exactly when you go looking for them.
+ */
+test('searching finds somebody who has not posted yet', function () {
+    $quiet = User::factory()->create(['full_name' => 'Silent Sam', 'username' => 'silent_sam']);
+
+    $names = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'silent']))->assertOk()->json('data.people')
+    )->pluck('full_name');
+
+    expect($names->all())->toBe(['Silent Sam']);
+
+    // And the row is honest about it rather than hiding the count.
+    $row = collect($this->getJson(route('api.v1.discover', ['q' => 'silent']))->json('data.people'))
+        ->firstWhere('id', $quiet->id);
+
+    expect($row['posts_count'])->toBe(0);
+});
+
+test('searching by username finds them too', function () {
+    User::factory()->create(['full_name' => 'Quiet Quinn', 'username' => 'newjoiner']);
+
+    $names = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'newjoin']))->assertOk()->json('data.people')
+    )->pluck('full_name');
+
+    expect($names->all())->toBe(['Quiet Quinn']);
+});
+
+test('browsing still leaves the empty accounts out', function () {
+    User::factory()->create(['full_name' => 'Silent Sam']);
+    Post::factory()->for(User::factory()->create(['full_name' => 'Busy Bea']))->create();
+
+    // No term: this is the shop window, and an account with nothing on it is
+    // worse than a shorter list.
+    $names = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.people'))
+        ->pluck('full_name');
+
+    expect($names->all())->toBe(['Busy Bea']);
+});
