@@ -37,6 +37,8 @@ class CircleManagementController extends Controller
     {
         Gate::authorize('manage', $circle);
 
+        $circle->load('owner');
+
         return Inertia::render('circles/manage', [
             'circle' => [
                 'id' => $circle->id,
@@ -47,6 +49,18 @@ class CircleManagementController extends Controller
                 'tag' => $circle->tag,
                 'members_count' => $circle->members_count,
                 'can_manage' => true,
+                /*
+                 * Handing the circle to somebody else is staff's alone, not the
+                 * owner's. An owner giving their circle away is a different
+                 * feature with different questions attached — this one exists
+                 * for the circle whose owner has gone quiet, and the person who
+                 * has gone quiet is not the one who will click it.
+                 */
+                'can_transfer_ownership' => (bool) $request->user()?->is_admin,
+                'owner' => $circle->owner === null ? null : [
+                    'id' => $circle->owner->id,
+                    'full_name' => $circle->owner->full_name,
+                ],
             ],
             'members' => $circle->memberships()
                 ->with('user')

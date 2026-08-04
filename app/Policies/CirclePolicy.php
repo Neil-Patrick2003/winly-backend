@@ -8,6 +8,24 @@ use App\Models\User;
 class CirclePolicy
 {
     /**
+     * Let staff into every circle, whatever is being asked.
+     *
+     * Admin is not a bigger version of owner — it answers a different question.
+     * An owner is asked about their own group; an admin is asked about the
+     * platform, and the whole point of the staff screens is reaching a circle
+     * nobody has asked them into: one whose owner has gone quiet, or that has
+     * been reported.
+     *
+     * Returning null rather than false for everybody else leaves the ordinary
+     * checks below to decide, which is what keeps this from being the only
+     * rule that matters.
+     */
+    public function before(User $user, string $ability): ?bool
+    {
+        return $user->is_admin ? true : null;
+    }
+
+    /**
      * Determine whether the user can look inside the circle.
      *
      * Public circles are open to anyone signed in — that is what public means,

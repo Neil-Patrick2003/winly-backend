@@ -1,5 +1,5 @@
 import { Form, Head, router, useForm } from '@inertiajs/react';
-import { Ban, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
+import { Ban, Crown, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import CircleManagementController from '@/actions/App/Http/Controllers/CircleManagementController';
 import { CircleBadge } from '@/components/circle-badge';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -13,7 +13,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { owner as circleOwner } from '@/routes/admin/circles';
 import { manage, members as membersTab } from '@/routes/circles';
 import type {
     CircleHeader,
@@ -77,16 +82,23 @@ export default function Manage({
             <Head title={`Manage ${circle.name}`} />
 
             {/*
-              * The frame matches the circle's other pages so the header and the
-              * way back line up as you move between them; the content keeps a
-              * readable measure inside it, since a form field the width of the
-              * page is harder to fill in, not easier.
-              */}
+             * The frame matches the circle's other pages so the header and the
+             * way back line up as you move between them; the content keeps a
+             * readable measure inside it, since a form field the width of the
+             * page is harder to fill in, not easier.
+             */}
             <Page width="wide">
                 <PageHeader
                     title={`Manage ${circle.name}`}
-                    description="Only you can see this page — you own this circle."
-                    back={{ href: membersTab(circle.id), label: 'Back to the circle' }}
+                    description={
+                        circle.can_transfer_ownership
+                            ? 'You are here as staff. Everything the owner can do, you can do.'
+                            : 'Only you can see this page — you own this circle.'
+                    }
+                    back={{
+                        href: membersTab(circle.id),
+                        label: 'Back to the circle',
+                    }}
                     leading={
                         <CircleBadge
                             initial={circle.icon_initial}
@@ -102,7 +114,9 @@ export default function Manage({
                         description="How the circle appears everywhere it is listed."
                     >
                         <Form
-                            {...CircleManagementController.update.form(circle.id)}
+                            {...CircleManagementController.update.form(
+                                circle.id,
+                            )}
                             options={{ preserveScroll: true }}
                             className="space-y-4"
                         >
@@ -122,15 +136,21 @@ export default function Manage({
                                     </div>
 
                                     <div className="grid gap-2">
-                                        <Label htmlFor="description">Description</Label>
+                                        <Label htmlFor="description">
+                                            Description
+                                        </Label>
                                         <Input
                                             id="description"
                                             name="description"
-                                            defaultValue={circle.description ?? ''}
+                                            defaultValue={
+                                                circle.description ?? ''
+                                            }
                                             maxLength={500}
                                             placeholder="What this circle is for"
                                         />
-                                        <InputError message={errors.description} />
+                                        <InputError
+                                            message={errors.description}
+                                        />
                                     </div>
 
                                     <div className="grid gap-4 sm:grid-cols-3">
@@ -146,19 +166,27 @@ export default function Manage({
                                         </div>
 
                                         <div className="grid gap-2">
-                                            <Label htmlFor="icon_initial">Initial</Label>
+                                            <Label htmlFor="icon_initial">
+                                                Initial
+                                            </Label>
                                             <Input
                                                 id="icon_initial"
                                                 name="icon_initial"
-                                                defaultValue={circle.icon_initial}
+                                                defaultValue={
+                                                    circle.icon_initial
+                                                }
                                                 required
                                                 maxLength={2}
                                             />
-                                            <InputError message={errors.icon_initial} />
+                                            <InputError
+                                                message={errors.icon_initial}
+                                            />
                                         </div>
 
                                         <div className="grid gap-2">
-                                            <Label htmlFor="color_hex">Colour</Label>
+                                            <Label htmlFor="color_hex">
+                                                Colour
+                                            </Label>
                                             <Input
                                                 id="color_hex"
                                                 name="color_hex"
@@ -167,7 +195,9 @@ export default function Manage({
                                                 required
                                                 className="h-9 w-full p-1"
                                             />
-                                            <InputError message={errors.color_hex} />
+                                            <InputError
+                                                message={errors.color_hex}
+                                            />
                                         </div>
                                     </div>
 
@@ -187,7 +217,10 @@ export default function Manage({
                             <Input
                                 value={searchForm.data.search}
                                 onChange={(event) =>
-                                    searchForm.setData('search', event.target.value)
+                                    searchForm.setData(
+                                        'search',
+                                        event.target.value,
+                                    )
                                 }
                                 placeholder="Search by name or username"
                                 aria-label="Search people to invite"
@@ -199,7 +232,9 @@ export default function Manage({
                                         <span className="sr-only">Search</span>
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Search people to invite</TooltipContent>
+                                <TooltipContent>
+                                    Search people to invite
+                                </TooltipContent>
                             </Tooltip>
                         </form>
 
@@ -232,7 +267,8 @@ export default function Manage({
                                                     <Badge variant="destructive">
                                                         Blocked
                                                     </Badge>
-                                                ) : person.invite_status === 'pending' ? (
+                                                ) : person.invite_status ===
+                                                  'pending' ? (
                                                     <Badge variant="outline">
                                                         Invited
                                                     </Badge>
@@ -240,7 +276,9 @@ export default function Manage({
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => invite(person)}
+                                                        onClick={() =>
+                                                            invite(person)
+                                                        }
                                                     >
                                                         <UserPlus className="size-4" />
                                                         {person.invite_status ===
@@ -264,14 +302,19 @@ export default function Manage({
                         >
                             <ul className={listStyles}>
                                 {invitations.map((invitation) => (
-                                    <li key={invitation.id} className="px-4 py-3">
+                                    <li
+                                        key={invitation.id}
+                                        className="px-4 py-3"
+                                    >
                                         <PersonRow
                                             person={invitation.user}
                                             action={
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => revoke(invitation)}
+                                                    onClick={() =>
+                                                        revoke(invitation)
+                                                    }
                                                 >
                                                     Take back
                                                 </Button>
@@ -294,9 +337,55 @@ export default function Manage({
                                         person={member}
                                         action={
                                             member.is_owner ? (
-                                                <Badge variant="secondary">Owner</Badge>
+                                                <Badge variant="secondary">
+                                                    Owner
+                                                </Badge>
                                             ) : (
                                                 <>
+                                                    {circle.can_transfer_ownership && (
+                                                        <ConfirmDialog
+                                                            tooltip="Make this member the owner"
+                                                            title={`Hand ${circle.name} to ${member.full_name}?`}
+                                                            description={`They will be able to rename the circle, invite, remove and block members, and delete it. ${
+                                                                circle.owner
+                                                                    ? `${circle.owner.full_name} stays a member, but loses all of that.`
+                                                                    : 'Nobody can do any of that today.'
+                                                            }`}
+                                                            confirmLabel="Hand it over"
+                                                            onConfirm={() =>
+                                                                router.patch(
+                                                                    circleOwner.url(
+                                                                        circle.id,
+                                                                    ),
+                                                                    {
+                                                                        owner_id:
+                                                                            member.id,
+                                                                    },
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                )
+                                                            }
+                                                            trigger={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    <Crown className="size-4" />
+                                                                    <span className="sr-only">
+                                                                        Make{' '}
+                                                                        {
+                                                                            member.full_name
+                                                                        }{' '}
+                                                                        the
+                                                                        owner
+                                                                    </span>
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    )}
+
                                                     <ConfirmDialog
                                                         tooltip="Remove from circle"
                                                         title={`Remove ${member.full_name}?`}
@@ -305,9 +394,13 @@ export default function Manage({
                                                         onConfirm={() =>
                                                             router.delete(
                                                                 CircleManagementController.removeMember.url(
-                                                                    scoped(member.id),
+                                                                    scoped(
+                                                                        member.id,
+                                                                    ),
                                                                 ),
-                                                                { preserveScroll: true },
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
                                                             )
                                                         }
                                                         trigger={
@@ -319,7 +412,9 @@ export default function Manage({
                                                                 <UserMinus className="size-4" />
                                                                 <span className="sr-only">
                                                                     Remove{' '}
-                                                                    {member.full_name}
+                                                                    {
+                                                                        member.full_name
+                                                                    }
                                                                 </span>
                                                             </Button>
                                                         }
@@ -334,10 +429,14 @@ export default function Manage({
                                                         onConfirm={() =>
                                                             router.post(
                                                                 CircleManagementController.block.url(
-                                                                    scoped(member.id),
+                                                                    scoped(
+                                                                        member.id,
+                                                                    ),
                                                                 ),
                                                                 {},
-                                                                { preserveScroll: true },
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
                                                             )
                                                         }
                                                         trigger={
@@ -349,7 +448,9 @@ export default function Manage({
                                                                 <Ban className="size-4" />
                                                                 <span className="sr-only">
                                                                     Block{' '}
-                                                                    {member.full_name}
+                                                                    {
+                                                                        member.full_name
+                                                                    }
                                                                 </span>
                                                             </Button>
                                                         }
@@ -382,9 +483,13 @@ export default function Manage({
                                                     onClick={() =>
                                                         router.delete(
                                                             CircleManagementController.unblock.url(
-                                                                scoped(person.id),
+                                                                scoped(
+                                                                    person.id,
+                                                                ),
                                                             ),
-                                                            { preserveScroll: true },
+                                                            {
+                                                                preserveScroll: true,
+                                                            },
                                                         )
                                                     }
                                                 >
@@ -410,7 +515,9 @@ export default function Manage({
                             destructive
                             onConfirm={() =>
                                 router.delete(
-                                    CircleManagementController.destroy.url(circle.id),
+                                    CircleManagementController.destroy.url(
+                                        circle.id,
+                                    ),
                                 )
                             }
                             trigger={

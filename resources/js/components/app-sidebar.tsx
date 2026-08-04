@@ -1,5 +1,11 @@
-import { Link } from '@inertiajs/react';
-import { LayoutGrid, Settings2, Users } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    LayoutGrid,
+    Settings2,
+    ShieldCheck,
+    UserCog,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -13,9 +19,33 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { circles as adminCircles, users as adminUsers } from '@/routes/admin';
 import { index as circlesIndex } from '@/routes/circles';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavGroup } from '@/types';
+
+/**
+ * The staff screens, shown only to staff.
+ *
+ * Kept out of `navGroups` rather than filtered inside it, so that for everybody
+ * else these entries are never built at all — a nav that quietly carried the
+ * admin routes and only hid them would be telling every member they exist.
+ */
+const adminGroup: NavGroup = {
+    label: 'Admin',
+    items: [
+        {
+            title: 'People',
+            href: adminUsers(),
+            icon: UserCog,
+        },
+        {
+            title: 'All circles',
+            href: adminCircles(),
+            icon: ShieldCheck,
+        },
+    ],
+};
 
 const navGroups: NavGroup[] = [
     {
@@ -59,6 +89,23 @@ const navGroups: NavGroup[] = [
  * drops the fixed positioning that keeps the rail still while a page scrolls.
  */
 export function AppSidebar() {
+    const { auth } = usePage().props;
+
+    /*
+     * Staff get "All circles" instead of "Circles", not as well as it.
+     *
+     * The member entry lists the circles you happen to belong to, which is not
+     * the question an admin has — and the staff list already contains them.
+     * Two entries a word apart, one a subset of the other, is a choice nobody
+     * should have to make on the way to the same place.
+     */
+    const groups = auth.user?.is_admin
+        ? [
+              ...navGroups.filter((group) => group.label !== 'Community'),
+              adminGroup,
+          ]
+        : navGroups;
+
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader className="px-4 py-5">
@@ -78,7 +125,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent className="gap-6 px-2 py-2">
-                <NavMain groups={navGroups} />
+                <NavMain groups={groups} />
             </SidebarContent>
 
             <SidebarFooter className="border-t border-sidebar-border p-3">

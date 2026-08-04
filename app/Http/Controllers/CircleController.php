@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Circles\CreateCircle;
+use App\Concerns\DescribesCircles;
 use App\Http\Requests\Api\V1\StoreCircleRequest;
 use App\Http\Requests\IndexMyCirclesRequest;
 use App\Http\Requests\IndexTrackerRequest;
@@ -23,7 +24,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\MediaLibrary\MediaCollections\Models\Collections\MediaCollection;
@@ -33,6 +33,8 @@ use Spatie\QueryBuilder\QueryBuilder;
 
 class CircleController extends Controller
 {
+    use DescribesCircles;
+
     /**
      * How many rows a tab shows before paging.
      */
@@ -42,18 +44,6 @@ class CircleController extends Controller
      * How recently a circle must have been posted in to count as active.
      */
     protected const ACTIVE_WITHIN_DAYS = 7;
-
-    /**
-     * How many faces the stack on a circle's card shows.
-     */
-    protected const FACES_ON_CARD = 3;
-
-    /**
-     * The pastels a circle's card can be washed in.
-     *
-     * @var list<string>
-     */
-    protected const WASHES = ['blue', 'lavender', 'pink', 'peach', 'mint', 'butter'];
 
     /**
      * List the circles the signed-in user belongs to.
@@ -150,29 +140,6 @@ class CircleController extends Controller
     }
 
     /**
-     * One circle as its card needs it.
-     *
-     * @return array<string, mixed>
-     */
-    protected function circleListing(User $reader, Circle $circle): array
-    {
-        return [
-            ...$this->circleCard($reader, $circle),
-            'wash' => $this->washFor($circle->name),
-            'posts_count' => $circle->posts_count,
-            'is_active' => (int) $circle->getAttribute('recent_posts_count') > 0,
-            'faces' => $circle->members
-                ->map(fn (User $member): array => [
-                    'id' => $member->id,
-                    'full_name' => $member->full_name,
-                    'avatar_url' => $member->avatar_url,
-                ])
-                ->values()
-                ->all(),
-        ];
-    }
-
-    /**
      * How many circles sit behind each tab.
      *
      * Counted over everything the reader belongs to rather than over the
@@ -191,18 +158,6 @@ class CircleController extends Controller
         $all = $user->circles()->count();
 
         return ['all' => $all, 'active' => $active, 'quiet' => $all - $active];
-    }
-
-    /**
-     * The pastel a circle is drawn in, decided by its name.
-     *
-     * Stable, so a circle keeps its colour across reloads and between the card
-     * and the chip, and picked here rather than stored so the palette can be
-     * retuned without a migration.
-     */
-    protected function washFor(string $name): string
-    {
-        return self::WASHES[abs(crc32(Str::lower($name))) % count(self::WASHES)];
     }
 
     /**
@@ -561,24 +516,5 @@ class CircleController extends Controller
     protected function circleProps(Request $request, Circle $circle): array
     {
         return $this->circleCard($request->user(), $circle);
-    }
-
-    /**
-     * A circle described for whoever is reading it.
-     *
-     * @return array<string, mixed>
-     */
-    protected function circleCard(User $reader, Circle $circle): array
-    {
-        return [
-            'id' => $circle->id,
-            'name' => $circle->name,
-            'description' => $circle->description,
-            'icon_initial' => $circle->icon_initial,
-            'color_hex' => $circle->color_hex,
-            'tag' => $circle->tag,
-            'members_count' => $circle->members_count,
-            'can_manage' => $reader->can('manage', $circle),
-        ];
     }
 }

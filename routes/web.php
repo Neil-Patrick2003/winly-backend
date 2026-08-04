@@ -1,5 +1,9 @@
 <?php
 
+use App\Http\Controllers\Admin\CircleController as AdminCircleController;
+use App\Http\Controllers\Admin\CircleOwnershipController;
+use App\Http\Controllers\Admin\PasswordResetLinkController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\CircleController;
 use App\Http\Controllers\CircleManagementController;
 use App\Http\Controllers\Dashboard\ActivityFeedController;
@@ -64,6 +68,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('blocks/{user}', [CircleManagementController::class, 'unblock'])->name('blocks.destroy');
 
         Route::delete('/', [CircleManagementController::class, 'destroy'])->name('destroy');
+    });
+
+    /*
+     * Staff only, and the one thing nobody inside a circle can do for
+     * themselves: the policy asks the owner for permission to change the owner,
+     * so a circle whose owner has gone quiet has no way out from the inside.
+     */
+    Route::middleware('admin')->prefix('admin')->as('admin.')->group(function () {
+        Route::get('circles', [AdminCircleController::class, 'index'])->name('circles');
+        Route::post('circles', [AdminCircleController::class, 'store'])->name('circles.store');
+        /*
+         * The transfer lives on the circle's own manage screen rather than on a
+         * staff-only page: everything else about running a circle is already
+         * there, and staff reach that screen for any circle through the policy.
+         */
+        Route::patch('circles/{circle}/owner', CircleOwnershipController::class)->name('circles.owner');
+
+        Route::get('users', [UserController::class, 'index'])->name('users');
+        Route::post('users/{user}/reset-link', PasswordResetLinkController::class)->name('users.reset-link');
     });
 });
 

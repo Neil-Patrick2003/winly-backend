@@ -12,16 +12,15 @@ export type CircleHeader = CircleSummary & {
     description: string | null;
     tag: string | null;
     members_count: number;
+    /** Staff only — handing a circle on is not the owner's to do. */
+    can_transfer_ownership?: boolean;
+    /** Who runs it. Null for a circle nobody owns. */
+    owner?: { id: string; full_name: string } | null;
 };
 
 /** The pastels a circle's card can be washed in. */
 export type CircleWash =
-    | 'blue'
-    | 'lavender'
-    | 'pink'
-    | 'peach'
-    | 'mint'
-    | 'butter';
+    'blue' | 'lavender' | 'pink' | 'peach' | 'mint' | 'butter';
 
 /** A circle as the My Circles list shows it. */
 export type CircleListing = CircleHeader & {
@@ -42,6 +41,24 @@ export type CircleMember = {
     avatar_url: string | null;
     joined_at: string | null;
     is_owner: boolean;
+};
+
+/** One account on the staff people screen. */
+export type AdminUserRow = {
+    id: string;
+    full_name: string;
+    username: string | null;
+    email: string;
+    avatar_url: string | null;
+    is_admin: boolean;
+    email_verified: boolean;
+    joined_at: string | null;
+};
+
+/** A circle on the staff list: the member's card, plus who runs it. */
+export type AdminCircleListing = CircleListing & {
+    /** Null for a circle seeded before ownership, or whose owner's account went. */
+    owner: CirclePerson | null;
 };
 
 export type CircleMemberRow = CircleMember & {
