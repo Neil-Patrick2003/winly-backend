@@ -2,7 +2,6 @@ import { Head, router } from '@inertiajs/react';
 import { Plus, Search, ShieldAlert, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AdminCreateCircleDialog } from '@/components/admin-create-circle-dialog';
-import { AdminNav } from '@/components/admin-nav';
 import { CircleCard } from '@/components/circle-card';
 import { EmptyState } from '@/components/empty-state';
 import { Page, PageHeader } from '@/components/page';
@@ -104,7 +103,6 @@ export default function AdminCircles({
                                     </Button>
                                 }
                             />
-                            <AdminNav />
                         </>
                     }
                 />

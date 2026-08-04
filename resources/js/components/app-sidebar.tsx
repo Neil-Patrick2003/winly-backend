@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Activity,
     LayoutGrid,
     Settings2,
     ShieldCheck,
@@ -19,7 +20,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { circles as adminCircles, users as adminUsers } from '@/routes/admin';
+import {
+    circles as adminCircles,
+    dashboard as adminDashboard,
+    users as adminUsers,
+} from '@/routes/admin';
 import { index as circlesIndex } from '@/routes/circles';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavGroup } from '@/types';
@@ -34,6 +39,11 @@ import type { NavGroup } from '@/types';
 const adminGroup: NavGroup = {
     label: 'Admin',
     items: [
+        {
+            title: 'Platform health',
+            href: adminDashboard(),
+            icon: Activity,
+        },
         {
             title: 'People',
             href: adminUsers(),
@@ -92,18 +102,17 @@ export function AppSidebar() {
     const { auth } = usePage().props;
 
     /*
-     * Staff get "All circles" instead of "Circles", not as well as it.
+     * Staff get the admin entries instead of the member ones, not as well as
+     * them. "Platform health" is an admin's dashboard and "All circles" is
+     * their circle list — each a superset of the member entry it replaces, so
+     * keeping both would offer a choice between two doors to the same room.
      *
-     * The member entry lists the circles you happen to belong to, which is not
-     * the question an admin has — and the staff list already contains them.
-     * Two entries a word apart, one a subset of the other, is a choice nobody
-     * should have to make on the way to the same place.
+     * System sits last for staff. It is the one group that is about your own
+     * account rather than the platform, so it belongs under the work rather
+     * than above it.
      */
     const groups = auth.user?.is_admin
-        ? [
-              ...navGroups.filter((group) => group.label !== 'Community'),
-              adminGroup,
-          ]
+        ? [adminGroup, ...navGroups.filter((group) => group.label === 'System')]
         : navGroups;
 
     return (

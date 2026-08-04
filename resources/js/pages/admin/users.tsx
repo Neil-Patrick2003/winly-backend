@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import PasswordResetLinkController from '@/actions/App/Http/Controllers/Admin/PasswordResetLinkController';
-import { AdminNav } from '@/components/admin-nav';
 import { EmptyState } from '@/components/empty-state';
 import { Page, PageHeader } from '@/components/page';
 import { Pagination } from '@/components/pagination';
@@ -131,7 +130,6 @@ export default function AdminUsers({
                 <PageHeader
                     title="People"
                     description="Everybody with an account. Reset links are for the ones whose email never arrives."
-                    action={<AdminNav />}
                 />
 
                 <div className="relative mt-6 sm:max-w-sm">

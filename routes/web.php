@@ -3,6 +3,17 @@
 use App\Http\Controllers\Admin\CircleController as AdminCircleController;
 use App\Http\Controllers\Admin\CircleOwnershipController;
 use App\Http\Controllers\Admin\PasswordResetLinkController;
+use App\Http\Controllers\Admin\Stats\AccountsStatController;
+use App\Http\Controllers\Admin\Stats\ActiveAccountsStatController;
+use App\Http\Controllers\Admin\Stats\CirclesStatController as AdminCirclesStatController;
+use App\Http\Controllers\Admin\Stats\DailyPostsStatController as AdminDailyPostsStatController;
+use App\Http\Controllers\Admin\Stats\EngagementStatController as AdminEngagementStatController;
+use App\Http\Controllers\Admin\Stats\LiveStreaksStatController;
+use App\Http\Controllers\Admin\Stats\PostsSeriesController;
+use App\Http\Controllers\Admin\Stats\SignupsSeriesController;
+use App\Http\Controllers\Admin\Stats\SignupsStatController;
+use App\Http\Controllers\Admin\Stats\WinMixController;
+use App\Http\Controllers\Admin\Stats\WinsLoggedStatController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\CircleController;
 use App\Http\Controllers\CircleManagementController;
@@ -76,6 +87,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
      * so a circle whose owner has gone quiet has no way out from the inside.
      */
     Route::middleware('admin')->prefix('admin')->as('admin.')->group(function () {
+        Route::inertia('/', 'admin/dashboard')->name('dashboard');
+
+        /*
+         * One endpoint per tile, matching the owner console: a slow aggregate
+         * holds up its own number rather than the page, and a failure shows in
+         * the tile it belongs to.
+         */
+        Route::prefix('stats')->as('stats.')->group(function () {
+            Route::get('signups', SignupsStatController::class)->name('signups');
+            Route::get('active', ActiveAccountsStatController::class)->name('active');
+            Route::get('posts', AdminDailyPostsStatController::class)->name('posts');
+            Route::get('streaks', LiveStreaksStatController::class)->name('streaks');
+            Route::get('accounts', AccountsStatController::class)->name('accounts');
+            Route::get('circles', AdminCirclesStatController::class)->name('circles');
+            Route::get('wins', WinsLoggedStatController::class)->name('wins');
+            Route::get('engagement', AdminEngagementStatController::class)->name('engagement');
+            Route::get('win-mix', WinMixController::class)->name('win-mix');
+            Route::get('signups-series', SignupsSeriesController::class)->name('signups-series');
+            Route::get('posts-series', PostsSeriesController::class)->name('posts-series');
+        });
+
         Route::get('circles', [AdminCircleController::class, 'index'])->name('circles');
         Route::post('circles', [AdminCircleController::class, 'store'])->name('circles.store');
         /*
