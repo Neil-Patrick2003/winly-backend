@@ -81,8 +81,19 @@ class DiscoverController extends Controller
 
         $people = User::query()
             ->whereKeyNot($viewer->getKey())
-            ->whereNotIn('id', $viewer->following()->select('users.id'))
-            ->when(! $searching, fn (Builder $query) => $query->has('posts'))
+            /*
+             * Both narrowings belong to the shop window rather than to the
+             * search box, and for the same reason: somebody you already follow
+             * is not worth *recommending*, but they are absolutely worth
+             * finding. Searching a friend's name and getting nothing back
+             * because you already follow them reads as the search being broken.
+             *
+             * The rows carry `is_following` either way, so a result that is
+             * already followed says so instead of offering to follow again.
+             */
+            ->when(! $searching, fn (Builder $query) => $query
+                ->whereNotIn('id', $viewer->following()->select('users.id'))
+                ->has('posts'))
             ->withCount('posts')
             ->when($searching, function (Builder $query) use ($term): void {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], (string) $term).'%';

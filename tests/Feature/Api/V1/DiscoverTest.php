@@ -175,3 +175,31 @@ test('browsing still leaves the empty accounts out', function () {
 
     expect($names->all())->toBe(['Busy Bea']);
 });
+
+test('searching finds somebody you already follow, and says that you do', function () {
+    $friend = User::factory()->create(['full_name' => 'Already Alice']);
+    Post::factory()->for($friend)->create();
+    Follow::factory()->from($this->user)->to($friend)->create();
+
+    $row = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'alice']))->assertOk()->json('data.people')
+    )->firstWhere('id', $friend->id);
+
+    // Found, and honest about the state — a row offering to follow somebody you
+    // already follow is a tap the server would only refuse.
+    expect($row)->not->toBeNull()
+        ->and($row['is_following'])->toBeTrue();
+});
+
+test('browsing still leaves out the people you follow', function () {
+    $friend = User::factory()->create(['full_name' => 'Already Alice']);
+    Post::factory()->for($friend)->create();
+    Follow::factory()->from($this->user)->to($friend)->create();
+
+    Post::factory()->for(User::factory()->create(['full_name' => 'Busy Bea']))->create();
+
+    $names = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.people'))
+        ->pluck('full_name');
+
+    expect($names->all())->toBe(['Busy Bea']);
+});
