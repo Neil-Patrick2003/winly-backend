@@ -1,6 +1,14 @@
 export type CircleSummary = {
     id: string;
     name: string;
+    /**
+     * The circle this one sits inside, by name — null when it stands alone.
+     *
+     * Carried so a circle reads the same wherever it is named: "finance (meta)".
+     * Two circles called "finance" under different parents are otherwise two
+     * rows nothing can tell apart.
+     */
+    parent?: { id: string; name: string } | null;
     icon_initial: string;
     color_hex: string;
     /** Whether the reader owns this circle, and so may manage it. */

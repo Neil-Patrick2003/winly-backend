@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
  *
  * @property string $id
  * @property string|null $owner_id
+ * @property string|null $parent_id
  * @property string $name
  * @property string|null $description
  * @property string $icon_initial
@@ -32,7 +33,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  * @property-read User|null $owner
  */
-#[Fillable(['owner_id', 'name', 'description', 'icon_initial', 'color_hex', 'tag', 'is_private', 'members_count'])]
+#[Fillable(['owner_id', 'parent_id', 'name', 'description', 'icon_initial', 'color_hex', 'tag', 'is_private', 'members_count'])]
 #[UsePolicy(CirclePolicy::class)]
 class Circle extends Model
 {
@@ -73,6 +74,37 @@ class Circle extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /**
+     * The circle this one sits inside, if any.
+     *
+     * @return BelongsTo<Circle, $this>
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /**
+     * The circles sitting inside this one.
+     *
+     * Only ever one level: a circle inside another cannot hold more, so this is
+     * a list and never a tree to walk.
+     *
+     * @return HasMany<Circle, $this>
+     */
+    public function subCircles(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * Whether this circle sits inside another.
+     */
+    public function isSubCircle(): bool
+    {
+        return $this->parent_id !== null;
     }
 
     /**

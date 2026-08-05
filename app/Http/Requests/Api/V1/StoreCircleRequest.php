@@ -40,6 +40,24 @@ class StoreCircleRequest extends FormRequest
             ],
             'description' => ['nullable', 'string', 'max:'.self::MAX_DESCRIPTION_LENGTH],
             'tag' => ['nullable', 'string', 'max:40'],
+
+            /*
+             * The circle this one sits inside, when it is one of those.
+             *
+             * Narrowed to circles the caller owns: a sub-circle is the parent
+             * owner's to make, and being handed the id of somebody else's group
+             * is not permission to open a circle inside it.
+             *
+             * The controller refuses a parent that is itself a sub-circle. That
+             * is the one-level rule, and it is checked there rather than here
+             * because it is a fact about the circle rather than about the shape
+             * of the request.
+             */
+            'parent_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('circles', 'id')->where('owner_id', $this->user()?->getKey()),
+            ],
             /*
              * Only public circles for now.
              *

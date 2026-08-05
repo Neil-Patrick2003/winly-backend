@@ -50,6 +50,7 @@ class DiscoverController extends Controller
                 'memberships as is_member' => fn (Builder $query) => $query
                     ->where('user_id', $viewer->getKey()),
             ])
+            ->with('parent')
             ->withCount('posts')
             ->orderByDesc('members_count')
             ->orderBy('id')

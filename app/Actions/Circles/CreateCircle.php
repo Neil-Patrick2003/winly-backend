@@ -29,7 +29,7 @@ class CreateCircle
      * would need explaining, and every count on the screen would have to
      * special-case it.
      *
-     * @param  array{name: string, description?: string|null, tag?: string|null}  $attributes
+     * @param  array{name: string, description?: string|null, tag?: string|null, parent_id?: string|null}  $attributes
      */
     public function execute(User $owner, array $attributes): Circle
     {
@@ -38,6 +38,10 @@ class CreateCircle
         return DB::transaction(function () use ($owner, $name, $attributes): Circle {
             $circle = Circle::create([
                 'owner_id' => $owner->getKey(),
+                // Null for a circle in its own right; set when it sits
+                // inside another. The caller has already established that the
+                // parent is theirs and is not itself a sub-circle.
+                'parent_id' => $attributes['parent_id'] ?? null,
                 'name' => $name,
                 'description' => $attributes['description'] ?? null,
                 'tag' => $attributes['tag'] ?? null,

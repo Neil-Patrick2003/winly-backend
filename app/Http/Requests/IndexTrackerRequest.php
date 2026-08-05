@@ -34,6 +34,17 @@ class IndexTrackerRequest extends FormRequest
             // day rather than nothing at all.
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'page' => ['nullable', 'integer', 'min:1'],
+
+            /*
+             * Which circles to count, out of this one and the circles inside
+             * it. Absent means all of them, which is what the tab is for.
+             *
+             * Only ids are validated here — whether each one actually belongs
+             * to this circle is a question about the circle, and the controller
+             * answers it by intersecting with what it already knows.
+             */
+            'circles' => ['nullable', 'array'],
+            'circles.*' => ['uuid'],
         ];
     }
 
@@ -47,6 +58,18 @@ class IndexTrackerRequest extends FormRequest
         return [
             'to.after_or_equal' => 'The end of the range cannot fall before its start.',
         ];
+    }
+
+    /**
+     * The circles the reader asked to count, if they narrowed it.
+     *
+     * @return list<string>
+     */
+    public function circleIds(): array
+    {
+        $ids = $this->validated('circles') ?? [];
+
+        return array_values(array_unique(array_map(strval(...), $ids)));
     }
 
     /**

@@ -24,8 +24,15 @@ class PostPolicy
             return true;
         }
 
+        // The same two ways in that `Post::visibleTo` gives a list: a circle
+        // this reader is in, or a sub-circle of one. See the scope for why the
+        // second never needs to walk further than a single hop.
+        $mine = $user->circles()->getQuery()->select('circles.id');
+
         return $post->circles()
-            ->whereIn('circles.id', $user->circles()->getQuery()->select('circles.id'))
+            ->where(fn ($circles) => $circles
+                ->whereIn('circles.id', $mine)
+                ->orWhereIn('circles.parent_id', $mine))
             ->exists();
     }
 

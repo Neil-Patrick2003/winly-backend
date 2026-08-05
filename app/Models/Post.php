@@ -303,10 +303,22 @@ class Post extends Model
             $allowed
                 ->where($allowed->qualifyColumn('visibility'), self::VISIBILITY_PUBLIC)
                 ->orWhere($allowed->qualifyColumn('user_id'), $reader->getKey())
-                ->orWhereHas('circles', fn (Builder $circles) => $circles->whereIn(
-                    'circles.id',
-                    $reader->circles()->getQuery()->select('circles.id')
-                ));
+                /*
+                 * In one of the reader's circles, or in a sub-circle of one.
+                 *
+                 * A circle inside another is a smaller group, and what is
+                 * said in it carries outward: the people in the wider circle
+                 * may read it, though the people in the smaller one were who it
+                 * was addressed to. `parent_id` is the second clause, and it
+                 * only ever needs to be one — sub-circles do not nest, so there
+                 * is no chain to walk.
+                 */
+                ->orWhereHas('circles', fn (Builder $circles) => $circles
+                    ->whereIn('circles.id', $reader->circles()->getQuery()->select('circles.id'))
+                    ->orWhereIn(
+                        'circles.parent_id',
+                        $reader->circles()->getQuery()->select('circles.id')
+                    ));
         });
     }
 

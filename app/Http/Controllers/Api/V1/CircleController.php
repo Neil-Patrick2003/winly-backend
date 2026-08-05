@@ -28,6 +28,14 @@ use Illuminate\Validation\ValidationException;
 class CircleController extends Controller
 {
     /**
+     * How many inner circles one listing carries.
+     *
+     * A ceiling rather than a page: a circle with more inside it than this has
+     * outgrown the shape, and paginating them would be a way of not saying so.
+     */
+    protected const MAX_SUB_CIRCLES = 50;
+
+    /**
      * The circles this person is in — the ones they made and the ones they
      * joined, newest first.
      *
@@ -55,7 +63,7 @@ class CircleController extends Controller
                     ->where('user_id', $viewer->getKey()),
             ])
             ->withCount('posts')
-            ->with('owner')
+            ->with('owner', 'parent')
             // The id breaks ties, so the cursor has something unique to sit on
             // when two circles are made in the same second.
             ->orderByDesc('created_at')
@@ -75,15 +83,18 @@ class CircleController extends Controller
      */
     public function store(StoreCircleRequest $request, CreateCircle $createCircle): JsonResponse
     {
+        $parent = $this->parentFor($request->validated('parent_id'));
+
         $circle = $createCircle->execute($request->user(), [
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
+            'parent_id' => $parent?->getKey(),
         ]);
 
         $circle->setAttribute('is_member', true);
 
-        return (new CircleResource($circle->load('owner')))
+        return (new CircleResource($circle->load('owner', 'parent')))
             ->response()
             ->setStatusCode(201);
     }
@@ -102,7 +113,9 @@ class CircleController extends Controller
             $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
         );
 
-        return (new CircleResource($circle->load('owner')->loadCount('posts')))->response();
+        // The parent rides along so a sub-circle's screen can name the circle
+        // it sits inside without a second request to find out.
+        return (new CircleResource($circle->load('owner', 'parent')->loadCount('posts')))->response();
     }
 
     /**
@@ -152,7 +165,7 @@ class CircleController extends Controller
             $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
         );
 
-        return (new CircleResource($circle->load('owner')->loadCount('posts')))->response();
+        return (new CircleResource($circle->load('owner', 'parent')->loadCount('posts')))->response();
     }
 
     /**
@@ -327,6 +340,100 @@ class CircleController extends Controller
         $circle->delete();
 
         return response()->json(['data' => ['id' => $circle->getKey()]]);
+    }
+
+    /**
+     * The circle a new sub-circle is being opened inside, if any.
+     *
+     * Validation has already established that the id names a circle the caller
+     * owns. What is left is the rule the database cannot express: nesting goes
+     * one level deep, so a circle already inside another cannot hold more.
+     *
+     * Refused rather than flattened onto the grandparent — a client asking for
+     * something the model does not have should be told so, not quietly given
+     * something else.
+     */
+    protected function parentFor(?string $parentId): ?Circle
+    {
+        if ($parentId === null) {
+            return null;
+        }
+
+        $parent = Circle::query()->findOrFail($parentId);
+
+        if ($parent->isSubCircle()) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'A sub-circle cannot hold sub-circles of its own.',
+            ]);
+        }
+
+        return $parent;
+    }
+
+    /**
+     * The circles inside one circle.
+     *
+     * Answered to anybody who may see the parent, because a sub-circle is part
+     * of what the parent is: knowing a circle has a beginners' circle inside is
+     * not the same as being able to read it, and the wall behind each one is
+     * still its own to gate.
+     *
+     * Not paginated. A circle with more inside it than fits in one answer is
+     * not a shape this is built for, and the cap says so rather than pretending.
+     *
+     * @return AnonymousResourceCollection<int, CircleResource>
+     */
+    public function subCircles(Request $request, Circle $circle): AnonymousResourceCollection
+    {
+        Gate::authorize('view', $circle);
+
+        $viewer = $request->user();
+
+        $inner = $circle->subCircles()
+            ->withExists([
+                'memberships as is_member' => fn (Builder $member) => $member
+                    ->where('user_id', $viewer->getKey()),
+            ])
+            ->withCount('posts')
+            ->with('owner', 'parent')
+            ->orderBy('name')
+            ->limit(self::MAX_SUB_CIRCLES)
+            ->get();
+
+        return CircleResource::collection($inner);
+    }
+
+    /**
+     * Hand a sub-circle to one of its members.
+     *
+     * The parent's owner decides who keeps the circle they opened, and may
+     * change their mind later. Only a sub-circle has this: a circle in its own right
+     * answers to nobody above it, so there is nobody with standing to reassign
+     * it.
+     *
+     * The new owner has to be in it already. Handing a circle to somebody who
+     * is not in it would leave it run by an outsider, whose first act would be
+     * joining the thing they already own.
+     */
+    public function assignOwner(Request $request, Circle $circle, User $user): JsonResponse
+    {
+        Gate::authorize('update', $circle);
+
+        if (! $circle->isSubCircle()) {
+            throw ValidationException::withMessages([
+                'circle' => 'Only a sub-circle can be handed to somebody else.',
+            ]);
+        }
+
+        if (! $circle->memberships()->where('user_id', $user->getKey())->exists()) {
+            throw ValidationException::withMessages([
+                'user' => 'They have to be in the sub-circle first.',
+            ]);
+        }
+
+        $circle->update(['owner_id' => $user->getKey()]);
+
+        return (new CircleResource($circle->fresh()?->load('owner')))->response();
     }
 
     /**

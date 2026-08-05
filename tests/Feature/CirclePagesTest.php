@@ -479,3 +479,198 @@ test('the dashboard no longer carries a circles prop', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page->missing('circles'));
 });
+
+/*
+ * The manage page carries what its sub-circle card needs.
+ *
+ * The names have to match what the page destructures, and nothing shouts when
+ * they do not: a mis-cased prop arrives as `undefined`, which is falsy, so the
+ * card simply never renders and the page looks like the feature was never
+ * built. That is exactly what happened — `can_add_sub_circle` for a page
+ * reading `canAddSubCircle`.
+ */
+test('the manage page offers the owner a way to open a circle inside', function () {
+    $this->actingAs($this->owner)
+        ->get(route('circles.manage', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('circles/manage')
+            ->has('subCircles', 0)
+            ->where('canAddSubCircle', true)
+        );
+});
+
+test('a circle already inside another is not offered more', function () {
+    $inner = Circle::factory()->create([
+        'owner_id' => $this->owner->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Inner Circle',
+    ]);
+
+    $this->actingAs($this->owner)
+        ->get(route('circles.manage', $inner))
+        ->assertOk()
+        // They do not nest, so the card is not drawn at all.
+        ->assertInertia(fn ($page) => $page->where('canAddSubCircle', false));
+});
+
+test('the manage page lists the circles already inside', function () {
+    Circle::factory()->create([
+        'owner_id' => $this->member->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Beginners',
+    ]);
+
+    $this->actingAs($this->owner)
+        ->get(route('circles.manage', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('subCircles', 1)
+            ->where('subCircles.0.name', 'Beginners')
+            ->where('subCircles.0.owner.full_name', 'Bea Member')
+        );
+});
+
+/*
+ * The tracker counts the circles inside this one as well.
+ *
+ * A circle's tracker is the group's picture of itself, and one that stopped at
+ * the outer wall would leave out most of what the group has been doing — the
+ * smaller circles are where a lot of it happens. The picker narrows it back
+ * down for anybody who wants one of them on its own.
+ */
+test('the tracker counts wins from the circles inside this one', function () {
+    $inner = Circle::factory()->create([
+        'owner_id' => $this->owner->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Beginners',
+    ]);
+    CircleMembership::create([
+        'user_id' => $this->member->id,
+        'circle_id' => $inner->id,
+        'joined_at' => now(),
+    ]);
+
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($inner, $this->member, 'movement', today()->subDay());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.wins.meditation', 1)
+            // Shared into the inner circle, and counted here all the same.
+            ->where('members.data.1.wins.movement', 1)
+            ->where('members.data.1.total', 2)
+            ->has('circleOptions', 2)
+            ->where('circleOptions.0.is_parent', true)
+        );
+});
+
+test('the picker narrows the tracker to the circles named', function () {
+    $inner = Circle::factory()->create([
+        'owner_id' => $this->owner->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Beginners',
+    ]);
+    CircleMembership::create([
+        'user_id' => $this->member->id,
+        'circle_id' => $inner->id,
+        'joined_at' => now(),
+    ]);
+
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($inner, $this->member, 'movement', today()->subDay());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'circles' => [$inner->id]]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.0.wins.movement', 1)
+            ->where('members.data.0.wins.meditation', 0)
+            ->where('selectedCircles', [$inner->id])
+        );
+});
+
+test('somebody in both circles is one row, not two', function () {
+    $inner = Circle::factory()->create([
+        'owner_id' => $this->owner->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Beginners',
+    ]);
+    CircleMembership::create([
+        'user_id' => $this->member->id,
+        'circle_id' => $inner->id,
+        'joined_at' => now(),
+    ]);
+
+    // Owner and member, each once, however many of these circles they are in.
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 2));
+});
+
+test('a circle id from somewhere else cannot be counted here', function () {
+    $theirs = Circle::factory()->create(['name' => 'Not Ours']);
+    shareWin($theirs, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'circles' => [$theirs->id]]))
+        ->assertOk()
+        // Narrowed to nothing recognisable, so it falls back to this circle
+        // and its own — never to a circle the reader simply named.
+        ->assertInertia(fn ($page) => $page
+            ->where('selectedCircles', [$this->circle->id])
+            ->where('members.data.1.wins.meditation', 0)
+        );
+});
+
+/*
+ * Staff reach every circle through the policy, so the tools on the manage page
+ * are already theirs — including the ones added for sub-circles. Asserted
+ * rather than assumed: `CirclePolicy::before` is what makes it true, and a
+ * change there would take these with it silently.
+ */
+test('staff can open a circle inside one they do not own', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+
+    $this->actingAs($admin)
+        ->post(route('circles.sub.store', $this->circle), ['name' => 'Staff Made'])
+        ->assertRedirect();
+
+    expect($this->circle->subCircles()->where('name', 'Staff Made')->exists())->toBeTrue();
+});
+
+test('staff see the sub-circle tools on somebody else circle', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+
+    $this->actingAs($admin)
+        ->get(route('circles.manage', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('canAddSubCircle', true)
+            // The staff-only hand-over, which is how an owner is assigned.
+            ->where('circle.can_transfer_ownership', true)
+        );
+});
+
+test('staff can invite somebody they do not follow', function () {
+    $admin = User::factory()->create(['is_admin' => true]);
+    $stranger = User::factory()->create(['full_name' => 'Zed Stranger']);
+
+    $names = collect(
+        $this->actingAs($admin)
+            ->get(route('circles.manage', $this->circle))
+            ->assertOk()
+            ->viewData('page')['props']['candidates']
+    )->pluck('full_name');
+
+    // An owner only sees mutual follows here; staff are not on this screen as
+    // a member, and a circle nobody has asked them into is the point of it.
+    expect($names)->toContain('Zed Stranger');
+
+    $this->actingAs($admin)
+        ->post(route('circles.invitations.store', $this->circle), ['user_id' => $stranger->id])
+        ->assertRedirect();
+});

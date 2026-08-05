@@ -67,8 +67,9 @@ class PostController extends Controller
             'user' => fn (Relation $query) => $query->withActiveStory(),
             'user.followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
             // One eager load for the whole page, so a feed of circle posts
-            // costs one query rather than one per post.
-            'circles',
+            // costs one query rather than one per post. The parent rides along
+            // so a chip can name a circle the way it is named everywhere else.
+            'circles.parent',
         ];
     }
 

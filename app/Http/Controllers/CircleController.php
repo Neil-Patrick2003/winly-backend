@@ -86,6 +86,8 @@ class CircleController extends Controller
             ->with(['members' => fn (Relation $members) => $members
                 ->orderBy('circle_memberships.joined_at')
                 ->limit(self::FACES_ON_CARD)])
+            // One query for the whole page rather than one per card.
+            ->with('parent')
             ->defaultSort('name')
             ->allowedSorts('name', 'members_count', 'posts_count')
             ->get()
@@ -337,43 +339,91 @@ class CircleController extends Controller
     /**
      * Show what each member has been winning at, and for how long a run.
      *
-     * Counts only wins shared into this circle. A member's other wins are not
+     * Counts only wins shared into these circles. A member's other wins are not
      * the circle's to see — the feed already holds them back — and a tracker
      * that counted them would be reporting on people behind their backs.
+     *
+     * A circle with circles inside it counts them too, and the people in them.
+     * The tab is the group's picture of itself, and a picture that stopped at
+     * the outer wall would leave out most of what the group has been doing.
+     * The picker narrows it back down where somebody wants one of them alone.
      */
     public function tracker(IndexTrackerRequest $request, Circle $circle): Response
     {
         Gate::authorize('view', $circle);
 
-        $members = $circle->memberships()
-            ->with('user')
-            ->join('users', 'users.id', '=', 'circle_memberships.user_id')
-            ->orderBy('users.full_name')
-            ->select('circle_memberships.*')
+        // This circle and the ones inside it, in the order the picker shows.
+        $available = collect([$circle])->concat(
+            $circle->isSubCircle() ? [] : $circle->subCircles()->orderBy('name')->get()
+        );
+
+        /*
+         * What the reader asked for, narrowed to what is actually on offer.
+         *
+         * Intersected rather than trusted: the ids arrive in the query string,
+         * and one naming somebody else's circle would otherwise count wins this
+         * circle has no business seeing. An empty choice reads as "all", which
+         * is what an untouched picker means.
+         */
+        $offered = array_values(array_map(strval(...), $available->pluck('id')->all()));
+        $chosen = array_values(array_intersect($request->circleIds(), $offered));
+        $counting = $chosen === [] ? $offered : $chosen;
+
+        /*
+         * The people in any of those circles, listed once each.
+         *
+         * Paginated over users rather than over membership rows, which is what
+         * the tab is actually a list of: somebody in the parent and two circles
+         * inside it has three memberships and belongs on one line. Grouping the
+         * membership rows said the same thing but asked MySQL to hand back
+         * columns it had not grouped by — `only_full_group_by` refuses that,
+         * and the subquery a paginator wraps the count in refuses it first.
+         */
+        $members = User::query()
+            ->whereIn('id', CircleMembership::query()
+                ->whereIn('circle_id', $counting)
+                ->select('user_id'))
+            ->orderBy('full_name')
+            // The id breaks ties, so a page boundary does not shuffle two
+            // people who share a name.
+            ->orderBy('id')
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
         $userIds = array_values($members->getCollection()
-            ->map(fn (CircleMembership $membership): string => $membership->user_id)
+            ->map(fn (User $member): string => $member->id)
             ->all());
 
-        $counts = $this->winCounts($circle, $userIds, $request->from(), $request->to());
-        $daysLogged = $this->daysLogged($circle, $userIds, $request->from(), $request->to());
+        $counts = $this->winCounts($counting, $userIds, $request->from(), $request->to());
+        $daysLogged = $this->daysLogged($counting, $userIds, $request->from(), $request->to());
 
         return Inertia::render('circles/tracker', [
+            /*
+             * The circles the picker offers, and which are counted right now.
+             * A circle with none inside it sends a single entry, and the page
+             * leaves the control out rather than showing a choice of one.
+             */
+            'circleOptions' => $available
+                ->map(fn (Circle $option): array => [
+                    'id' => $option->id,
+                    'name' => $option->name,
+                    'is_parent' => $option->id === $circle->id,
+                ])
+                ->all(),
+            'selectedCircles' => $counting,
             'circle' => $this->circleProps($request, $circle),
             'winTypes' => Post::WIN_TYPES,
             'from' => $request->from()->toDateString(),
             'to' => $request->to()->toDateString(),
             'days' => $request->days(),
-            'members' => $members->through(function (CircleMembership $membership) use ($counts, $daysLogged): array {
-                $wins = $counts[$membership->user_id] ?? [];
+            'members' => $members->through(function (User $member) use ($counts, $daysLogged): array {
+                $wins = $counts[$member->id] ?? [];
 
                 return [
-                    'id' => $membership->user->id,
-                    'full_name' => $membership->user->full_name,
-                    'username' => $membership->user->username,
-                    'avatar_url' => $membership->user->avatar_url,
+                    'id' => $member->id,
+                    'full_name' => $member->full_name,
+                    'username' => $member->username,
+                    'avatar_url' => $member->avatar_url,
                     /*
                      * The streak still standing, not the stored column.
                      *
@@ -384,14 +434,14 @@ class CircleController extends Controller
                      * what decides it has lapsed, and it is what the profile
                      * and the API already answer with.
                      */
-                    'streak_days' => $membership->user->currentStreak(),
-                    'longest_streak' => $membership->user->longest_streak,
+                    'streak_days' => $member->currentStreak(),
+                    'longest_streak' => $member->longest_streak,
                     'wins' => collect(Post::WIN_TYPES)
                         ->mapWithKeys(fn (string $type): array => [
                             $type => (int) ($wins[$type] ?? 0),
                         ])
                         ->all(),
-                    'total' => $daysLogged[$membership->user_id] ?? 0,
+                    'total' => $daysLogged[$member->id] ?? 0,
                 ];
             }),
         ]);
@@ -408,10 +458,11 @@ class CircleController extends Controller
      * written — a sitting done on Sunday and shared on Monday belongs to
      * Sunday.
      *
+     * @param  list<string>  $circleIds  This circle and any counted with it.
      * @param  list<string>  $userIds
      * @return array<string, array<string, int>> Keyed by user, then win type.
      */
-    protected function winCounts(Circle $circle, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    protected function winCounts(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
@@ -437,7 +488,7 @@ class CircleController extends Controller
                 ->whereExists(fn (BaseBuilder $shared) => $shared
                     ->from('circle_post')
                     ->whereColumn('circle_post.post_id', "{$posts}.id")
-                    ->where('circle_post.circle_id', $circle->getKey()))
+                    ->whereIn('circle_post.circle_id', $circleIds))
                 ->whereIn("{$posts}.user_id", $userIds)
                 ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->groupBy("{$posts}.user_id")
@@ -466,10 +517,11 @@ class CircleController extends Controller
      * dates and the union is taken in PHP — a day with a sitting and a run on
      * it must not count twice.
      *
+     * @param  list<string>  $circleIds  This circle and any counted with it.
      * @param  list<string>  $userIds
      * @return array<string, int> Keyed by user.
      */
-    protected function daysLogged(Circle $circle, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    protected function daysLogged(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
@@ -489,7 +541,7 @@ class CircleController extends Controller
                 ->whereExists(fn (BaseBuilder $shared) => $shared
                     ->from('circle_post')
                     ->whereColumn('circle_post.post_id', "{$posts}.id")
-                    ->where('circle_post.circle_id', $circle->getKey()))
+                    ->whereIn('circle_post.circle_id', $circleIds))
                 ->whereIn("{$posts}.user_id", $userIds)
                 ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->select([

@@ -48,6 +48,18 @@ trait DescribesCircles
             'color_hex' => $circle->color_hex,
             'tag' => $circle->tag,
             'members_count' => $circle->members_count,
+            /*
+             * The circle this one sits inside, by name.
+             *
+             * Carried on every card so a circle reads the same wherever it is
+             * named — "finance (meta)". Null for one standing on its own, and
+             * loaded lazily here because these cards are built one at a time
+             * from a collection the caller has usually already eager loaded.
+             */
+            'parent' => $circle->parent === null ? null : [
+                'id' => $circle->parent->id,
+                'name' => $circle->parent->name,
+            ],
             'can_manage' => $reader->can('manage', $circle),
         ];
     }

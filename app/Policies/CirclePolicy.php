@@ -89,8 +89,27 @@ class CirclePolicy
      * owner is nobody rather than everybody — otherwise the first person to ask
      * would inherit it.
      */
+    /**
+     * Whether this circle answers to this person as its owner.
+     *
+     * A sub-circle answers to two: whoever runs it, and whoever runs the circle
+     * it sits inside. The outer circle's owner made it and chose who keeps it,
+     * so they outrank that choice — they can rename it, move its members, hand
+     * it to somebody else or close it.
+     *
+     * Written here rather than at each ability so that every rule leaning on
+     * ownership picks it up at once. One level only, so this is a single hop
+     * and never a walk up a chain.
+     */
     protected function own(User $user, Circle $circle): bool
     {
-        return $circle->owner_id !== null && $circle->owner_id === $user->getKey();
+        if ($circle->owner_id !== null && $circle->owner_id === $user->getKey()) {
+            return true;
+        }
+
+        return $circle->parent_id !== null
+            && $circle->parent()->whereKey($circle->parent_id)
+                ->where('owner_id', $user->getKey())
+                ->exists();
     }
 }

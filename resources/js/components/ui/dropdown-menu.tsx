@@ -96,9 +96,23 @@ function DropdownMenuCheckboxItem({
       checked={checked}
       {...props}
     >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+      {/*
+        A drawn box rather than a bare tick.
+        A checkmark that only appears when set says nothing at all when it is
+        not: an unticked row looked like an ordinary menu item, so a list of
+        them read as a list of actions rather than as a set of choices. The box
+        is visible either way, which is what makes the row look answerable.
+      */}
+      <span
+        className={cn(
+          "pointer-events-none absolute left-2 flex size-4 items-center justify-center rounded-[4px] border transition-colors",
+          checked
+            ? "bg-primary border-primary text-primary-foreground"
+            : "border-input bg-background"
+        )}
+      >
         <DropdownMenuPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <CheckIcon className="size-3" strokeWidth={3} />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}

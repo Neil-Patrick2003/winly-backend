@@ -88,6 +88,13 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('circles/{circle}/members', [CircleController::class, 'members'])
             ->name('circles.members');
 
+        // The rooms inside one circle, and who keeps them.
+        Route::get('circles/{circle}/sub-circles', [CircleController::class, 'subCircles'])
+            ->name('circles.sub.index');
+
+        Route::put('circles/{circle}/owner/{user}', [CircleController::class, 'assignOwner'])
+            ->name('circles.owner.assign');
+
         Route::get('circles/{circle}/posts', [PostController::class, 'circle'])
             ->name('circles.posts');
 

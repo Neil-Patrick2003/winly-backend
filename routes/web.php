@@ -71,6 +71,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('manage', [CircleManagementController::class, 'edit'])->name('manage');
         Route::patch('manage', [CircleManagementController::class, 'update'])->name('manage.update');
 
+        // Circles inside this one. Made here rather than from the phone: it
+        // decides who ends up able to read a group's wins, and that is a
+        // decision to make sitting down.
+        Route::post('sub-circles', [CircleManagementController::class, 'createSubCircle'])
+            ->name('sub.store');
+
         Route::post('invitations', [CircleManagementController::class, 'invite'])->name('invitations.store');
         Route::delete('invitations/{invitation}', [CircleManagementController::class, 'revokeInvitation'])->name('invitations.destroy');
 
