@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Circles\BlockFromCircle;
+use App\Actions\Circles\CreateCircle;
 use App\Actions\Circles\InviteToCircle;
 use App\Actions\Circles\RemoveCircleMember;
+use App\Http\Requests\Api\V1\StoreCircleRequest;
 use App\Http\Requests\UpdateCircleRequest;
 use App\Models\Circle;
 use App\Models\CircleInvitation;
@@ -15,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,6 +40,8 @@ class CircleManagementController extends Controller
     {
         Gate::authorize('manage', $circle);
 
+        $circle->load('owner');
+
         return Inertia::render('circles/manage', [
             'circle' => [
                 'id' => $circle->id,
@@ -47,6 +52,18 @@ class CircleManagementController extends Controller
                 'tag' => $circle->tag,
                 'members_count' => $circle->members_count,
                 'can_manage' => true,
+                /*
+                 * Handing the circle to somebody else is staff's alone, not the
+                 * owner's. An owner giving their circle away is a different
+                 * feature with different questions attached — this one exists
+                 * for the circle whose owner has gone quiet, and the person who
+                 * has gone quiet is not the one who will click it.
+                 */
+                'can_transfer_ownership' => (bool) $request->user()?->is_admin,
+                'owner' => $circle->owner === null ? null : [
+                    'id' => $circle->owner->id,
+                    'full_name' => $circle->owner->full_name,
+                ],
             ],
             'members' => $circle->memberships()
                 ->with('user')
@@ -60,6 +77,31 @@ class CircleManagementController extends Controller
                     'joined_at' => $membership->joined_at->toIso8601String(),
                     'is_owner' => $membership->user_id === $circle->owner_id,
                 ]),
+            /*
+             * The circles inside this one.
+             *
+             * Only for a circle that stands on its own — one that already sits
+             * inside another cannot hold more, so the card does not appear and
+             * there is nothing to explain about why it is empty.
+             */
+            'subCircles' => $circle->isSubCircle() ? [] : $circle->subCircles()
+                ->with('owner')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Circle $sub): array => [
+                    'id' => $sub->id,
+                    'name' => $sub->name,
+                    'members_count' => $sub->members_count,
+                    'owner' => $sub->owner === null ? null : [
+                        'id' => $sub->owner->id,
+                        'full_name' => $sub->owner->full_name,
+                    ],
+                ])
+                ->all(),
+            // Camel-cased to match `subCircles` above and the prop the page
+            // destructures. Sent as snake_case it arrived as `undefined`, which
+            // is falsy — so the card silently never rendered.
+            'canAddSubCircle' => ! $circle->isSubCircle(),
             'invitations' => $this->pendingInvitations($circle),
             'blocked' => $this->blocked($circle),
             'candidates' => $this->candidates($request, $circle),
@@ -77,6 +119,40 @@ class CircleManagementController extends Controller
         $circle->update($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Circle updated.')]);
+
+        return back();
+    }
+
+    /**
+     * Open a circle inside this one.
+     *
+     * The owner's, and the website's: a sub-circle decides who ends up able to
+     * read a group's wins, and the phone deliberately does not offer it.
+     *
+     * Whoever creates it keeps it to begin with. Handing it to somebody else is
+     * a second, separate step — the list on this page is where that is done.
+     */
+    public function createSubCircle(
+        StoreCircleRequest $request,
+        Circle $circle,
+        CreateCircle $createCircle,
+    ): RedirectResponse {
+        Gate::authorize('manage', $circle);
+
+        if ($circle->isSubCircle()) {
+            throw ValidationException::withMessages([
+                'name' => __('This circle already sits inside another one.'),
+            ]);
+        }
+
+        $createCircle->execute($request->user(), [
+            'name' => $request->validated('name'),
+            'description' => $request->validated('description'),
+            'tag' => $request->validated('tag'),
+            'parent_id' => $circle->getKey(),
+        ]);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Circle created inside this one.')]);
 
         return back();
     }
@@ -251,9 +327,22 @@ class CircleManagementController extends Controller
         // candidate to answer a question the whole list shares.
         $blockedIds = $circle->blocks()->pluck('user_id')->all();
 
+        /*
+         * Friends only, unless staff are asking.
+         *
+         * An invitation from a stranger is unwelcome, so an owner may only ask
+         * people they and the person both follow. Staff are not on this screen
+         * as a member — they are here for a circle nobody has asked them into,
+         * and being unable to seat somebody in it because the two of them do
+         * not follow each other would be the wrong rule applied to the wrong
+         * person. Nothing else about the invitation changes: it is still an
+         * ask, and the invitee still has to accept it.
+         */
         return array_values(User::query()
-            ->whereIn('id', $viewer->following()->select('users.id'))
-            ->whereIn('id', $viewer->followers()->select('users.id'))
+            ->whereKeyNot($viewer->getKey())
+            ->when(! $viewer->is_admin, fn (Builder $query) => $query
+                ->whereIn('id', $viewer->following()->select('users.id'))
+                ->whereIn('id', $viewer->followers()->select('users.id')))
             ->when(filled($search), function (Builder $query) use ($search): void {
                 $term = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
 

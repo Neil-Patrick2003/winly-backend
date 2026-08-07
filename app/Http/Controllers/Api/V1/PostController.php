@@ -67,8 +67,9 @@ class PostController extends Controller
             'user' => fn (Relation $query) => $query->withActiveStory(),
             'user.followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),
             // One eager load for the whole page, so a feed of circle posts
-            // costs one query rather than one per post.
-            'circles',
+            // costs one query rather than one per post. The parent rides along
+            // so a chip can name a circle the way it is named everywhere else.
+            'circles.parent',
         ];
     }
 
@@ -245,6 +246,8 @@ class PostController extends Controller
         $post = DB::transaction(function () use ($request, $streak): Post {
             $user = $request->user();
 
+            $visibility = (string) $request->validated('visibility');
+
             $post = $user->posts()->create($request->safe()->only(['caption', 'visibility']));
 
             /*
@@ -255,7 +258,7 @@ class PostController extends Controller
              */
             $post->circles()->sync($this->circlesFor(
                 $user,
-                (string) $request->validated('visibility'),
+                $visibility,
                 $request->validated('circle_ids') ?? [],
             ));
 
@@ -312,6 +315,8 @@ class PostController extends Controller
         $discarded = [];
 
         DB::transaction(function () use ($request, $post, &$discarded): void {
+            $visibility = (string) $request->validated('visibility');
+
             $post->update($request->safe()->only(['caption', 'visibility']));
 
             /*
@@ -326,7 +331,7 @@ class PostController extends Controller
              */
             $post->circles()->sync($this->circlesFor(
                 $post->user,
-                (string) $request->validated('visibility'),
+                $visibility,
                 $request->validated('circle_ids') ?? [],
             ));
 
@@ -383,14 +388,16 @@ class PostController extends Controller
     /**
      * The circles a post should sit in, given who it is for.
      *
-     * Public reaches everybody and so belongs in no circle: leaving it in one
-     * would put it on that circle's wall as though it were shared there, and
-     * the wall is meant to be what the group was actually given.
+     * Public belongs to no circle. It is readable by everybody, which is a
+     * different thing from being on a particular group's wall — that wall is
+     * meant to be what the group was actually given, and a win that went out to
+     * the world is not that. Putting one there is a second, deliberate act:
+     * the circle's own screen offers it, for every public win not on it yet.
      *
      * "All circles" is resolved here, once, to the circles the author is in at
-     * this moment — and then it is just a list like any other. That is what
-     * makes the setting a snapshot rather than a standing instruction: joining
-     * a circle next month cannot reach back and hand it this win.
+     * this moment, and is then just a list like any other. That is what makes
+     * it a snapshot rather than a standing instruction: joining a circle next
+     * month cannot reach back and hand it this win.
      *
      * @param  list<string>  $chosen  The ids named by the author, when they
      *                                picked the circles themselves.

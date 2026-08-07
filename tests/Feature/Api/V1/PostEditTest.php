@@ -357,3 +357,52 @@ test('wins_count follows the wins on the post', function () {
 
     expect($this->user->fresh()->wins_count)->toBe(1);
 });
+
+/*
+ * How long a sit ran and whether it was seen through are two separate facts.
+ *
+ * The edit screen marked a meditation completed whenever its length was
+ * touched, which threw away a "stopped early" every time somebody corrected the
+ * duration — and even when they re-picked the length it already had. The client
+ * sends the flag through untouched now, so the server has to carry it.
+ */
+test('a sit that was stopped early stays that way when its length is corrected', function () {
+    $post = Post::factory()->for($this->user)->create();
+    WinMeditation::factory()->for($post, 'post')->create([
+        'duration_minutes' => 20,
+        'completed' => false,
+    ]);
+
+    $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
+        'wins' => [[
+            'type' => 'meditation',
+            'duration_minutes' => 15,
+            'completed' => false,
+        ]],
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.wins.0.duration_minutes', 15)
+        ->assertJsonPath('data.wins.0.completed', false);
+
+    expect(WinMeditation::sole())
+        ->duration_minutes->toBe(15)
+        ->completed->toBeFalse();
+});
+
+test('saying nothing about completion reads as completed', function () {
+    $post = Post::factory()->for($this->user)->create();
+    WinMeditation::factory()->for($post, 'post')->create([
+        'duration_minutes' => 20,
+        'completed' => false,
+    ]);
+
+    // The documented default, and the reason the client has to send the flag
+    // rather than leave it out: omission is an answer here, not a silence.
+    $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
+        'wins' => [['type' => 'meditation', 'duration_minutes' => 20]],
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.wins.0.completed', true);
+});

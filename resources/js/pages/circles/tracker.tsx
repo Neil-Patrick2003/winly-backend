@@ -1,8 +1,18 @@
 import { Head, router } from '@inertiajs/react';
-import { Flame, Users } from 'lucide-react';
+import { ChevronDown, Flame, Users } from 'lucide-react';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { EmptyState } from '@/components/empty-state';
 import { Pagination } from '@/components/pagination';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import {
     Tooltip,
@@ -48,6 +58,8 @@ function Count({ value, label }: { value: number; label: string }) {
 
 export default function Tracker({
     circle,
+    circleOptions,
+    selectedCircles,
     members,
     winTypes,
     from,
@@ -56,6 +68,10 @@ export default function Tracker({
     errors,
 }: {
     circle: CircleHeader;
+    /** This circle and the ones inside it — what the picker offers. */
+    circleOptions: { id: string; name: string; is_parent: boolean }[];
+    /** The ids actually being counted right now. */
+    selectedCircles: string[];
     members: Paginated<TrackerRow>;
     winTypes: WinType[];
     from: string;
@@ -63,12 +79,49 @@ export default function Tracker({
     days: number;
     errors: Record<string, string>;
 }) {
-    const apply = (nextFrom: string, nextTo: string) => {
+    /*
+     * The date range and the circle choice travel together.
+     *
+     * Both live in the query string, so changing one has to resend the other or
+     * it is dropped on the way — narrowing to a circle would silently reset the
+     * dates back to the default month.
+     */
+    const reload = (next: {
+        from?: string;
+        to?: string;
+        circles?: string[];
+    }) => {
+        const circles = next.circles ?? selectedCircles;
+
         router.get(
             tracker(circle.id).url,
-            { from: nextFrom, to: nextTo },
+            {
+                from: next.from ?? from,
+                to: next.to ?? to,
+                // All of them selected is the same as no filter, and a shorter
+                // URL says so.
+                ...(circles.length === circleOptions.length ? {} : { circles }),
+            },
             { preserveState: true, preserveScroll: true, replace: true },
         );
+    };
+
+    const apply = (nextFrom: string, nextTo: string) =>
+        reload({ from: nextFrom, to: nextTo });
+
+    /** Everything ticked is the same as no filter — the label says so. */
+    const allSelected = selectedCircles.length === circleOptions.length;
+
+    const toggleCircle = (id: string) => {
+        const next = selectedCircles.includes(id)
+            ? selectedCircles.filter((each) => each !== id)
+            : [...selectedCircles, id];
+
+        // Clearing the last one would count nothing, which is never what
+        // somebody means — an empty choice falls back to all of them.
+        reload({
+            circles: next.length === 0 ? circleOptions.map((o) => o.id) : next,
+        });
     };
 
     return (
@@ -79,7 +132,13 @@ export default function Tracker({
                 <div className="space-y-4">
                     <div className="flex flex-wrap items-end justify-between gap-4">
                         <p className="text-caption text-muted-foreground">
-                            Wins shared into this circle between{' '}
+                            Wins shared into{' '}
+                            {selectedCircles.length === circleOptions.length
+                                ? circleOptions.length > 1
+                                    ? 'this circle and the ones inside it'
+                                    : 'this circle'
+                                : `${selectedCircles.length} of ${circleOptions.length} circles`}{' '}
+                            between{' '}
                             <span className="font-medium text-foreground">
                                 {readable(from)}
                             </span>{' '}
@@ -90,16 +149,119 @@ export default function Tracker({
                             — {days} {days === 1 ? 'day' : 'days'}.
                         </p>
 
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="range" className="text-caption">
-                                Date range
-                            </Label>
-                            <DateRangePicker
-                                from={from}
-                                to={to}
-                                onApply={apply}
-                                invalid={!!errors.to}
-                            />
+                        {/* The two controls travel together, in their own row.
+                            They were siblings of the paragraph inside a
+                            justify-between container, so the space between
+                            them was whatever was left over after the text —
+                            wide on a long sentence, nothing on a short one.
+                            `items-end` lines their inputs up rather than their
+                            labels, which are different lengths. */}
+                        <div className="flex flex-wrap items-end gap-3">
+                            {/* Only where there is a choice to make: a circle with
+                                none inside it would be a picker of one. */}
+                            {circleOptions.length > 1 ? (
+                                <div className="grid gap-1.5">
+                                    <Label className="text-caption">
+                                        Circles counted
+                                    </Label>
+
+                                    {/* A dropdown rather than a row of chips: the
+                                        count is what somebody reads at a glance,
+                                        and a circle with a dozen inside it would
+                                        otherwise push the date picker off the row. */}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                className="w-56 justify-between font-normal"
+                                            >
+                                                <span className="truncate">
+                                                    {allSelected
+                                                        ? 'All circles'
+                                                        : selectedCircles.length ===
+                                                            1
+                                                          ? (circleOptions.find(
+                                                                (option) =>
+                                                                    option.id ===
+                                                                    selectedCircles[0],
+                                                            )?.name ??
+                                                            '1 circle')
+                                                          : `${selectedCircles.length} of ${circleOptions.length} circles`}
+                                                </span>
+                                                <ChevronDown
+                                                    className="size-4 opacity-50"
+                                                    aria-hidden
+                                                />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+
+                                        <DropdownMenuContent
+                                            align="start"
+                                            className="w-56"
+                                        >
+                                            <DropdownMenuLabel>
+                                                Count wins shared into
+                                            </DropdownMenuLabel>
+                                            <DropdownMenuSeparator />
+
+                                            {/* Kept open on each tick: choosing
+                                                three circles should be three taps,
+                                                not three trips back to the menu. */}
+                                            {circleOptions.map((option) => (
+                                                <DropdownMenuCheckboxItem
+                                                    key={option.id}
+                                                    checked={selectedCircles.includes(
+                                                        option.id,
+                                                    )}
+                                                    onSelect={(event) =>
+                                                        event.preventDefault()
+                                                    }
+                                                    onCheckedChange={() =>
+                                                        toggleCircle(option.id)
+                                                    }
+                                                >
+                                                    <span className="truncate">
+                                                        {option.name}
+                                                    </span>
+                                                    {option.is_parent ? null : (
+                                                        <span className="ml-1 text-xs text-muted-foreground">
+                                                            inside
+                                                        </span>
+                                                    )}
+                                                </DropdownMenuCheckboxItem>
+                                            ))}
+
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                disabled={allSelected}
+                                                onSelect={() =>
+                                                    reload({
+                                                        circles:
+                                                            circleOptions.map(
+                                                                (option) =>
+                                                                    option.id,
+                                                            ),
+                                                    })
+                                                }
+                                            >
+                                                Select all
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+                            ) : null}
+
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="range" className="text-caption">
+                                    Date range
+                                </Label>
+                                <DateRangePicker
+                                    from={from}
+                                    to={to}
+                                    onApply={apply}
+                                    invalid={!!errors.to}
+                                />
+                            </div>
                         </div>
                     </div>
 

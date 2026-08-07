@@ -14,6 +14,7 @@ use App\Http\Resources\Api\V1\CircleResource;
 use App\Http\Resources\Api\V1\UserSummaryResource;
 use App\Models\Circle;
 use App\Models\CircleMembership;
+use App\Models\Post;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -27,6 +28,14 @@ use Illuminate\Validation\ValidationException;
 
 class CircleController extends Controller
 {
+    /**
+     * How many inner circles one listing carries.
+     *
+     * A ceiling rather than a page: a circle with more inside it than this has
+     * outgrown the shape, and paginating them would be a way of not saying so.
+     */
+    protected const MAX_SUB_CIRCLES = 50;
+
     /**
      * The circles this person is in — the ones they made and the ones they
      * joined, newest first.
@@ -55,7 +64,7 @@ class CircleController extends Controller
                     ->where('user_id', $viewer->getKey()),
             ])
             ->withCount('posts')
-            ->with('owner')
+            ->with('owner', 'parent')
             // The id breaks ties, so the cursor has something unique to sit on
             // when two circles are made in the same second.
             ->orderByDesc('created_at')
@@ -75,15 +84,21 @@ class CircleController extends Controller
      */
     public function store(StoreCircleRequest $request, CreateCircle $createCircle): JsonResponse
     {
+        $parent = $this->parentFor($request->validated('parent_id'));
+
         $circle = $createCircle->execute($request->user(), [
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
+            'parent_id' => $parent?->getKey(),
+            // Absent is public. `boolean()` reads "1" and "true" off a form the
+            // same way it reads a JSON `true`.
+            'is_private' => $request->boolean('is_private'),
         ]);
 
         $circle->setAttribute('is_member', true);
 
-        return (new CircleResource($circle->load('owner')))
+        return (new CircleResource($circle->load('owner', 'parent')))
             ->response()
             ->setStatusCode(201);
     }
@@ -102,7 +117,11 @@ class CircleController extends Controller
             $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
         );
 
-        return (new CircleResource($circle->load('owner')->loadCount('posts')))->response();
+        $circle->setAttribute('syncable_posts_count', $this->syncablePostCount($viewer, $circle));
+
+        // The parent rides along so a sub-circle's screen can name the circle
+        // it sits inside without a second request to find out.
+        return (new CircleResource($circle->load('owner', 'parent')->loadCount('posts')))->response();
     }
 
     /**
@@ -145,6 +164,23 @@ class CircleController extends Controller
             }
         }
 
+        /*
+         * Who may find it, when the form said so.
+         *
+         * Kept apart from the loop above because absent means something
+         * different here: a missing description is one nobody typed, while a
+         * missing flag is a client that does not know about visibility at all,
+         * and turning its circles public would be the one thing it never asked
+         * for.
+         *
+         * Going private stops the circle appearing in Discover and in search.
+         * It does not turn anybody out: the people inside were let in, and what
+         * is on the wall was shared with them.
+         */
+        if (array_key_exists('is_private', $attributes)) {
+            $circle->is_private = (bool) $attributes['is_private'];
+        }
+
         $circle->save();
 
         $circle->setAttribute(
@@ -152,7 +188,7 @@ class CircleController extends Controller
             $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
         );
 
-        return (new CircleResource($circle->load('owner')->loadCount('posts')))->response();
+        return (new CircleResource($circle->load('owner', 'parent')->loadCount('posts')))->response();
     }
 
     /**
@@ -327,6 +363,174 @@ class CircleController extends Controller
         $circle->delete();
 
         return response()->json(['data' => ['id' => $circle->getKey()]]);
+    }
+
+    /**
+     * The circle a new sub-circle is being opened inside, if any.
+     *
+     * Validation has already established that the id names a circle the caller
+     * owns. What is left is the rule the database cannot express: nesting goes
+     * one level deep, so a circle already inside another cannot hold more.
+     *
+     * Refused rather than flattened onto the grandparent — a client asking for
+     * something the model does not have should be told so, not quietly given
+     * something else.
+     */
+    protected function parentFor(?string $parentId): ?Circle
+    {
+        if ($parentId === null) {
+            return null;
+        }
+
+        $parent = Circle::query()->findOrFail($parentId);
+
+        if ($parent->isSubCircle()) {
+            throw ValidationException::withMessages([
+                'parent_id' => 'A sub-circle cannot hold sub-circles of its own.',
+            ]);
+        }
+
+        return $parent;
+    }
+
+    /**
+     * How many of this person's own wins are not on this circle's wall yet.
+     *
+     * A win is placed in the circles its author was in *at the time*, because
+     * that is what sharing to your circles meant when they pressed the button.
+     * Joining a circle afterwards does not reach back — so somebody who has
+     * been posting for months walks into a new circle with none of it, and the
+     * wall says they have never shared a thing.
+     *
+     * Every win of theirs counts, whatever it was shared to. This was public
+     * ones only, on the grounds that a win told to one small group is that
+     * group's — but in practice almost nothing is public (the compose screen
+     * shares to your circles, and to one circle when you start from its own
+     * screen), so the offer was never made to anybody. Widening it does not
+     * move a win anywhere on its own: the author is standing in the circle
+     * asking for it, which is the same act as picking that circle when they
+     * wrote it, and the confirm says plainly what is about to be added.
+     */
+    protected function syncablePostCount(User $user, Circle $circle): int
+    {
+        return $this->syncablePosts($user, $circle)->count();
+    }
+
+    /**
+     * Those same wins, as a query.
+     *
+     * @return Builder<Post>
+     */
+    protected function syncablePosts(User $user, Circle $circle): Builder
+    {
+        return Post::query()
+            ->where('user_id', $user->getKey())
+            ->whereDoesntHave('circles', fn (Builder $in) => $in->whereKey($circle->getKey()));
+    }
+
+    /**
+     * Put this person's earlier wins on the circle's wall.
+     *
+     * Members only: adding to a group's wall is something you do from inside
+     * it, and it is their own wins alone — nobody hands somebody else's win to
+     * a room. Idempotent by way of `syncWithoutDetaching`, so a second press adds
+     * nothing and a double tap is not two of everything — and it never detaches
+     * what is already there, which would quietly unshare the wins somebody
+     * posted into this circle deliberately.
+     */
+    public function syncMyPosts(Request $request, Circle $circle): JsonResponse
+    {
+        Gate::authorize('view', $circle);
+
+        $user = $request->user();
+
+        if (! $circle->memberships()->where('user_id', $user->getKey())->exists()) {
+            throw ValidationException::withMessages([
+                'circle' => 'Join the circle before sharing your wins into it.',
+            ]);
+        }
+
+        $ids = $this->syncablePosts($user, $circle)->pluck('id')->all();
+
+        if ($ids !== []) {
+            $circle->posts()->syncWithoutDetaching($ids);
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $circle->getKey(),
+                'shared' => count($ids),
+                // Nought by definition once they are on the wall, and sent so
+                // the screen can put the button away without asking again.
+                'syncable_posts_count' => 0,
+            ],
+        ]);
+    }
+
+    /**
+     * The circles inside one circle.
+     *
+     * Answered to anybody who may see the parent, because a sub-circle is part
+     * of what the parent is: knowing a circle has a beginners' circle inside is
+     * not the same as being able to read it, and the wall behind each one is
+     * still its own to gate.
+     *
+     * Not paginated. A circle with more inside it than fits in one answer is
+     * not a shape this is built for, and the cap says so rather than pretending.
+     *
+     * @return AnonymousResourceCollection<int, CircleResource>
+     */
+    public function subCircles(Request $request, Circle $circle): AnonymousResourceCollection
+    {
+        Gate::authorize('view', $circle);
+
+        $viewer = $request->user();
+
+        $inner = $circle->subCircles()
+            ->withExists([
+                'memberships as is_member' => fn (Builder $member) => $member
+                    ->where('user_id', $viewer->getKey()),
+            ])
+            ->withCount('posts')
+            ->with('owner', 'parent')
+            ->orderBy('name')
+            ->limit(self::MAX_SUB_CIRCLES)
+            ->get();
+
+        return CircleResource::collection($inner);
+    }
+
+    /**
+     * Hand a sub-circle to one of its members.
+     *
+     * The parent's owner decides who keeps the circle they opened, and may
+     * change their mind later. Only a sub-circle has this: a circle in its own right
+     * answers to nobody above it, so there is nobody with standing to reassign
+     * it.
+     *
+     * The new owner has to be in it already. Handing a circle to somebody who
+     * is not in it would leave it run by an outsider, whose first act would be
+     * joining the thing they already own.
+     */
+    public function assignOwner(Request $request, Circle $circle, User $user): JsonResponse
+    {
+        Gate::authorize('update', $circle);
+
+        if (! $circle->isSubCircle()) {
+            throw ValidationException::withMessages([
+                'circle' => 'Only a sub-circle can be handed to somebody else.',
+            ]);
+        }
+
+        if (! $circle->memberships()->where('user_id', $user->getKey())->exists()) {
+            throw ValidationException::withMessages([
+                'user' => 'They have to be in the sub-circle first.',
+            ]);
+        }
+
+        $circle->update(['owner_id' => $user->getKey()]);
+
+        return (new CircleResource($circle->fresh()?->load('owner')))->response();
     }
 
     /**

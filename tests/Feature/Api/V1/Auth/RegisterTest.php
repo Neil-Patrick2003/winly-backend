@@ -4,6 +4,7 @@ use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 use Laravel\Sanctum\PersonalAccessToken;
 
 function registrationPayload(array $overrides = []): array
@@ -116,4 +117,38 @@ test('registration is rate limited', function () {
         'username' => 'neil_7',
         'email' => 'neil7@example.com',
     ]))->assertStatus(429);
+});
+
+/*
+ * A length, and nothing else.
+ *
+ * Production used to ask for twelve characters with mixed case, a number, a
+ * symbol and a breach check, while every other environment asked for eight —
+ * so a password that registered fine in development was refused on the live
+ * site, and no screen could state the rule and be right in both places.
+ */
+test('eight plain characters is a password', function () {
+    $this->postJson(route('api.v1.register'), registrationPayload([
+        // No capital, no digit, no symbol. Eight characters is the whole rule.
+        'password' => 'quietoak',
+        'password_confirmation' => 'quietoak',
+    ]))->assertCreated();
+});
+
+test('seven characters is not', function () {
+    $this->postJson(route('api.v1.register'), registrationPayload([
+        'password' => 'quietoa',
+        'password_confirmation' => 'quietoa',
+    ]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('password');
+
+    expect(User::count())->toBe(0);
+});
+
+test('the rule is the same one the app is told about', function () {
+    // The web screens read this string from the server rather than restating
+    // it, so it is what keeps the two from drifting apart again.
+    expect(Password::defaults()->toPasswordRulesString())
+        ->toBe('minlength: 8;');
 });

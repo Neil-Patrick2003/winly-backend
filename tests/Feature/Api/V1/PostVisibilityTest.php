@@ -170,9 +170,17 @@ test('sharing publicly places the win in no circle', function () {
     ])
         ->assertCreated()
         ->assertJsonPath('data.visibility', 'public')
+        // Readable by everybody, and on nobody's wall. A circle's wall is what
+        // that group was given; putting a public win there is a second act, and
+        // the circle's own screen is where it is offered.
         ->assertJsonCount(0, 'data.circles');
 
-    expect(Post::sole()->circles()->count())->toBe(0);
+    $post = Post::sole();
+
+    expect($post->circles()->count())->toBe(0);
+
+    Sanctum::actingAs($this->stranger);
+    $this->getJson(route('api.v1.posts.show', $post))->assertOk();
 });
 
 test('sharing with all circles resolves to the ones the author is in now', function () {
@@ -268,7 +276,7 @@ test('narrowing a public win to a circle hides it from everyone else', function 
     $this->getJson(route('api.v1.posts.show', $post))->assertOk();
 });
 
-test('opening a circle win to the public takes it off the circle wall', function () {
+test('changing a circle win to public takes it off that wall', function () {
     $post = circlePost();
 
     Sanctum::actingAs($this->author);
@@ -277,10 +285,54 @@ test('opening a circle win to the public takes it off the circle wall', function
         'wins' => [['type' => 'movement', 'movement_type' => 'run']],
     ])->assertOk();
 
-    // Public means everybody, so leaving it pinned inside the circle would
-    // claim on that wall that it was shared with the group in particular.
+    /*
+     * Public means readable by everybody and placed in no circle, so choosing
+     * it is choosing both halves — the win comes off the wall it was on.
+     *
+     * Recorded here because it is the surprising half of the rule: a post
+     * deliberately given to one group leaves that group when it is opened up.
+     * The circle's own screen is how it goes back, for this win and every other
+     * public one not on that wall.
+     */
     expect($post->fresh()->circles()->count())->toBe(0);
 
     Sanctum::actingAs($this->stranger);
+    $this->getJson(route('api.v1.posts.show', $post))->assertOk();
+});
+
+test('a private circle closes every door, and leaves the members their own', function () {
+    /*
+     * The sweep, rather than one route taken as a proof of the rest.
+     *
+     * Privacy is decided by circle *membership* and always was — turning the
+     * circle private changes who can find it, not who can read its wall. That
+     * is the right answer, but it means the guarantee rests on every path
+     * remembering to ask, and a path that forgets fails quietly.
+     */
+    $this->circle->update(['is_private' => true]);
+    $post = circlePost();
+
+    Sanctum::actingAs($this->stranger);
+
+    // The win itself, by each route that reaches one.
+    $this->getJson(route('api.v1.posts.index'))->assertOk()->assertJsonMissing(['id' => $post->id]);
+    $this->getJson(route('api.v1.users.posts', $this->author))
+        ->assertOk()
+        ->assertJsonMissing(['id' => $post->id]);
+    $this->getJson(route('api.v1.posts.show', $post))->assertForbidden();
+    $this->getJson(route('api.v1.posts.comments.index', $post))->assertForbidden();
+    $this->putJson(route('api.v1.posts.like', $post))->assertForbidden();
+    $this->putJson(route('api.v1.posts.save', $post))->assertForbidden();
+
+    // And the circle around it — a public one answers all four of these.
+    $this->getJson(route('api.v1.circles.show', $this->circle))->assertForbidden();
+    $this->getJson(route('api.v1.circles.posts', $this->circle))->assertForbidden();
+    $this->getJson(route('api.v1.circles.members', $this->circle))->assertForbidden();
+    $this->postJson(route('api.v1.circles.join', $this->circle))->assertForbidden();
+
+    // The people inside still have it. A boundary that shut them out too would
+    // be a broken circle rather than a private one.
+    Sanctum::actingAs($this->member);
+    $this->getJson(route('api.v1.posts.index'))->assertOk()->assertJsonPath('data.0.id', $post->id);
     $this->getJson(route('api.v1.posts.show', $post))->assertOk();
 });

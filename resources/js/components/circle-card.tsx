@@ -1,9 +1,13 @@
 import { Link } from '@inertiajs/react';
 import { MessageSquare } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/user-avatar';
 import { cn } from '@/lib/utils';
-import { members } from '@/routes/circles';
+import { manage, members } from '@/routes/circles';
 import type { CircleListing, CircleWash } from '@/types';
 
 /**
@@ -44,10 +48,7 @@ export function CircleCard({ circle }: { circle: CircleListing }) {
         <article className="group flex h-full flex-col overflow-hidden rounded-sheet border border-border bg-card shadow-card transition-shadow hover:shadow-raised">
             {/* A wash of the circle's colour, fading into the card it tops. */}
             <div
-                className={cn(
-                    'h-20 bg-gradient-to-b to-card',
-                    wash.band,
-                )}
+                className={cn('h-20 bg-gradient-to-b to-card', wash.band)}
                 aria-hidden
             />
 
@@ -61,6 +62,12 @@ export function CircleCard({ circle }: { circle: CircleListing }) {
                                 className="rounded-sm underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                             >
                                 {circle.name}
+                                {circle.parent ? (
+                                    <span className="font-normal text-muted-foreground">
+                                        {' '}
+                                        ({circle.parent.name})
+                                    </span>
+                                ) : null}
                             </Link>
                         </h2>
                     </div>
@@ -137,6 +144,20 @@ export function CircleCard({ circle }: { circle: CircleListing }) {
                         {circle.posts_count === 1 ? 'win' : 'wins'} shared
                     </TooltipContent>
                 </Tooltip>
+
+                {/* Straight to the settings for anybody who may change them —
+                    the owner, and staff on any circle at all. Everything a
+                    circle is run by lives there, sub-circles included, and it
+                    was three screens away through the members tab. */}
+                {circle.can_manage ? (
+                    <Link
+                        href={manage(circle.id)}
+                        prefetch
+                        className="rounded-sm text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                        Manage
+                    </Link>
+                ) : null}
             </div>
         </article>
     );

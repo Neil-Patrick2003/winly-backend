@@ -88,6 +88,18 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('circles/{circle}/members', [CircleController::class, 'members'])
             ->name('circles.members');
 
+        // The rooms inside one circle, and who keeps them.
+        // Your earlier wins onto a circle joined since they were posted.
+        Route::post('circles/{circle}/sync-my-posts', [CircleController::class, 'syncMyPosts'])
+            ->middleware('throttle:20,1')
+            ->name('circles.sync');
+
+        Route::get('circles/{circle}/sub-circles', [CircleController::class, 'subCircles'])
+            ->name('circles.sub.index');
+
+        Route::put('circles/{circle}/owner/{user}', [CircleController::class, 'assignOwner'])
+            ->name('circles.owner.assign');
+
         Route::get('circles/{circle}/posts', [PostController::class, 'circle'])
             ->name('circles.posts');
 

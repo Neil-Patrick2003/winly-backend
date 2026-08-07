@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Settings2 } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { CircleBadge } from '@/components/circle-badge';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn } from '@/lib/utils';
+import { circles as adminCircles } from '@/routes/admin';
 import {
     index as circlesIndex,
     manage,
@@ -28,6 +29,16 @@ export default function CircleLayout({
     children,
 }: PropsWithChildren<{ circle: CircleHeader }>) {
     const { isCurrentUrl } = useCurrentUrl();
+    const { auth } = usePage().props;
+
+    /*
+     * Back to the list you came from, which is a different list for staff.
+     *
+     * "My Circles" holds the ones you belong to, and staff open circles they
+     * are not in — so sending them there lands on a page that does not contain
+     * the circle they just left, and which their sidebar no longer offers.
+     */
+    const allCircles = auth.user?.is_admin ? adminCircles() : circlesIndex();
 
     const tabs = [
         { title: 'Members', href: members(circle.id) },
@@ -40,7 +51,7 @@ export default function CircleLayout({
             <PageHeader
                 title={circle.name}
                 description={circle.description ?? undefined}
-                back={{ href: circlesIndex(), label: 'All circles' }}
+                back={{ href: allCircles, label: 'All circles' }}
                 leading={
                     <CircleBadge
                         initial={circle.icon_initial}

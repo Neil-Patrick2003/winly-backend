@@ -50,6 +50,7 @@ class DiscoverController extends Controller
                 'memberships as is_member' => fn (Builder $query) => $query
                     ->where('user_id', $viewer->getKey()),
             ])
+            ->with('parent')
             ->withCount('posts')
             ->orderByDesc('members_count')
             ->orderBy('id')
@@ -67,16 +68,35 @@ class DiscoverController extends Controller
          * morning is not three times the poster of someone who writes three
          * separate mornings, which is what ranking by it would claim.
          *
-         * Anyone with nothing posted is left out rather than padding the list:
-         * suggesting an empty account is worse than suggesting nobody, so the
-         * list runs short instead.
+         * Anyone with nothing posted is left out of the *suggestions* rather
+         * than padding them: proposing an empty account is worse than proposing
+         * nobody, so the list runs short instead.
+         *
+         * Searching is the other thing entirely. Somebody typing a name is
+         * looking for a person, not for a recommendation, and answering "no
+         * results" because that person has not posted yet is answering a
+         * question they did not ask — most of all for a friend who has only
+         * just joined, which is exactly when you go looking for them.
          */
+        $searching = filled($term);
+
         $people = User::query()
             ->whereKeyNot($viewer->getKey())
-            ->whereNotIn('id', $viewer->following()->select('users.id'))
-            ->has('posts')
+            /*
+             * Both narrowings belong to the shop window rather than to the
+             * search box, and for the same reason: somebody you already follow
+             * is not worth *recommending*, but they are absolutely worth
+             * finding. Searching a friend's name and getting nothing back
+             * because you already follow them reads as the search being broken.
+             *
+             * The rows carry `is_following` either way, so a result that is
+             * already followed says so instead of offering to follow again.
+             */
+            ->when(! $searching, fn (Builder $query) => $query
+                ->whereNotIn('id', $viewer->following()->select('users.id'))
+                ->has('posts'))
             ->withCount('posts')
-            ->when(filled($term), function (Builder $query) use ($term): void {
+            ->when($searching, function (Builder $query) use ($term): void {
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], (string) $term).'%';
 
                 $query->where(function (Builder $query) use ($like): void {
@@ -95,9 +115,17 @@ class DiscoverController extends Controller
 
         return response()->json([
             'data' => [
-                // Every tag in use, not only those on the circles above — the
-                // chips are how somebody reaches the ones that did not make it.
+                /*
+                 * Every tag in use, not only those on the circles above — the
+                 * chips are how somebody reaches the ones that did not make it.
+                 *
+                 * Public circles only, like the list itself. A tag worn by
+                 * nothing else is a private circle announcing its subject, and
+                 * a chip that selects an empty list is the app saying there is
+                 * something here you cannot see.
+                 */
                 'tags' => Circle::query()
+                    ->where('is_private', false)
                     ->whereNotNull('tag')
                     ->distinct()
                     ->orderBy('tag')

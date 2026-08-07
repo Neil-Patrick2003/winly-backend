@@ -51,11 +51,15 @@ class UpdateCircleRequest extends FormRequest
             'description' => ['sometimes', 'nullable', 'string', 'max:'.StoreCircleRequest::MAX_DESCRIPTION_LENGTH],
             'tag' => ['sometimes', 'nullable', 'string', 'max:40'],
             /*
-             * Still only public circles — refused here for the same reason as
-             * on the way in: a circle that could be made public and then turned
-             * private would be the missing feature reached by a second step.
+             * Absent leaves it as it is, like the two fields above: a client
+             * sending a rename alone must not decide who can find the circle as
+             * a side effect of it.
+             *
+             * Turning a public circle private does not take it back from the
+             * people already in it — it only stops the next stranger finding
+             * it. What is already on the wall was shared with them.
              */
-            'is_private' => ['nullable', 'boolean', Rule::in([false, 0, '0'])],
+            'is_private' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -68,7 +72,6 @@ class UpdateCircleRequest extends FormRequest
     {
         return [
             'name.unique' => 'A circle already goes by that name.',
-            'is_private.in' => 'Private circles are not available yet.',
         ];
     }
 }

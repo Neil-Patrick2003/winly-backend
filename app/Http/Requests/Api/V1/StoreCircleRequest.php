@@ -40,17 +40,36 @@ class StoreCircleRequest extends FormRequest
             ],
             'description' => ['nullable', 'string', 'max:'.self::MAX_DESCRIPTION_LENGTH],
             'tag' => ['nullable', 'string', 'max:40'],
+
             /*
-             * Only public circles for now.
+             * The circle this one sits inside, when it is one of those.
              *
-             * The column and the flag exist, so the shape of the request is
-             * already right; what is missing is everything private implies —
-             * the subscription that unlocks it and the features it buys. Until
-             * that lands, asking for one is refused rather than quietly
-             * downgraded, so a client is never told it made something it did
-             * not.
+             * Narrowed to circles the caller owns: a sub-circle is the parent
+             * owner's to make, and being handed the id of somebody else's group
+             * is not permission to open a circle inside it.
+             *
+             * The controller refuses a parent that is itself a sub-circle. That
+             * is the one-level rule, and it is checked there rather than here
+             * because it is a fact about the circle rather than about the shape
+             * of the request.
              */
-            'is_private' => ['nullable', 'boolean', Rule::in([false, 0, '0'])],
+            'parent_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('circles', 'id')->where('owner_id', $this->user()?->getKey()),
+            ],
+            /*
+             * Who may find it.
+             *
+             * Public is the default, and absent means public: every circle made
+             * before this field existed is one, and a client that does not know
+             * to send it must keep making the kind it has always made.
+             *
+             * A private circle is left out of Discover and out of search, so
+             * the only ways in are an invitation and a link from somebody
+             * already inside.
+             */
+            'is_private' => ['nullable', 'boolean'],
         ];
     }
 
@@ -63,7 +82,6 @@ class StoreCircleRequest extends FormRequest
     {
         return [
             'name.unique' => 'A circle already goes by that name.',
-            'is_private.in' => 'Private circles are not available yet.',
         ];
     }
 }

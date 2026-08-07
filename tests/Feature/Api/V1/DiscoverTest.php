@@ -94,6 +94,26 @@ test('circles come back biggest first, with where the reader stands on each', fu
         ->and($circles->firstWhere('id', $big->id)['is_member'])->toBeFalse();
 });
 
+test('a private circle is neither listed nor findable, not even by its members', function () {
+    $open = Circle::factory()->create(['name' => 'Sunrise Runners', 'is_private' => false]);
+    $hidden = Circle::factory()->create(['name' => 'Sunrise Inner Ring', 'is_private' => true]);
+
+    // Being in it does not put it here: this list is for finding circles you
+    // are not in, and the reader reaches their own from My Circles.
+    CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $hidden->id]);
+
+    $browsing = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.circles'));
+
+    expect($browsing->pluck('id')->all())->toBe([$open->id]);
+
+    // And searching its name by heart turns up nothing either.
+    $searched = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'sunrise']))->assertOk()->json('data.circles')
+    );
+
+    expect($searched->pluck('id')->all())->toBe([$open->id]);
+});
+
 test('the tag chips list every tag in use', function () {
     Circle::factory()->create(['tag' => 'fitness']);
     Circle::factory()->create(['tag' => 'reading']);
@@ -103,6 +123,15 @@ test('the tag chips list every tag in use', function () {
     $this->getJson(route('api.v1.discover'))
         ->assertOk()
         ->assertJsonPath('data.tags', ['fitness', 'reading']);
+});
+
+test('a private circle does not announce its subject through the tag chips', function () {
+    Circle::factory()->create(['tag' => 'fitness', 'is_private' => false]);
+    Circle::factory()->create(['tag' => 'divorce-support', 'is_private' => true]);
+
+    $this->getJson(route('api.v1.discover'))
+        ->assertOk()
+        ->assertJsonPath('data.tags', ['fitness']);
 });
 
 test('a tag narrows the circles and leaves the people alone', function () {
@@ -127,4 +156,79 @@ test('a search term reaches both lists', function () {
     expect(collect($response->json('data.circles'))->pluck('name')->all())->toBe(['Sunrise Runners'])
         ->and(collect($response->json('data.people'))->pluck('full_name')->all())
         ->toBe(['Sunrise Sally']);
+});
+
+/*
+ * Suggesting and searching are different questions.
+ *
+ * An empty account is not worth proposing to somebody browsing, so it stays out
+ * of the suggestions. Typing a name is not browsing: it is looking for one
+ * person, and answering "no results" because they have not posted yet is
+ * answering a question nobody asked — least of all for a friend who has only
+ * just joined, which is exactly when you go looking for them.
+ */
+test('searching finds somebody who has not posted yet', function () {
+    $quiet = User::factory()->create(['full_name' => 'Silent Sam', 'username' => 'silent_sam']);
+
+    $names = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'silent']))->assertOk()->json('data.people')
+    )->pluck('full_name');
+
+    expect($names->all())->toBe(['Silent Sam']);
+
+    // And the row is honest about it rather than hiding the count.
+    $row = collect($this->getJson(route('api.v1.discover', ['q' => 'silent']))->json('data.people'))
+        ->firstWhere('id', $quiet->id);
+
+    expect($row['posts_count'])->toBe(0);
+});
+
+test('searching by username finds them too', function () {
+    User::factory()->create(['full_name' => 'Quiet Quinn', 'username' => 'newjoiner']);
+
+    $names = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'newjoin']))->assertOk()->json('data.people')
+    )->pluck('full_name');
+
+    expect($names->all())->toBe(['Quiet Quinn']);
+});
+
+test('browsing still leaves the empty accounts out', function () {
+    User::factory()->create(['full_name' => 'Silent Sam']);
+    Post::factory()->for(User::factory()->create(['full_name' => 'Busy Bea']))->create();
+
+    // No term: this is the shop window, and an account with nothing on it is
+    // worse than a shorter list.
+    $names = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.people'))
+        ->pluck('full_name');
+
+    expect($names->all())->toBe(['Busy Bea']);
+});
+
+test('searching finds somebody you already follow, and says that you do', function () {
+    $friend = User::factory()->create(['full_name' => 'Already Alice']);
+    Post::factory()->for($friend)->create();
+    Follow::factory()->from($this->user)->to($friend)->create();
+
+    $row = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'alice']))->assertOk()->json('data.people')
+    )->firstWhere('id', $friend->id);
+
+    // Found, and honest about the state — a row offering to follow somebody you
+    // already follow is a tap the server would only refuse.
+    expect($row)->not->toBeNull()
+        ->and($row['is_following'])->toBeTrue();
+});
+
+test('browsing still leaves out the people you follow', function () {
+    $friend = User::factory()->create(['full_name' => 'Already Alice']);
+    Post::factory()->for($friend)->create();
+    Follow::factory()->from($this->user)->to($friend)->create();
+
+    Post::factory()->for(User::factory()->create(['full_name' => 'Busy Bea']))->create();
+
+    $names = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.people'))
+        ->pluck('full_name');
+
+    expect($names->all())->toBe(['Busy Bea']);
 });

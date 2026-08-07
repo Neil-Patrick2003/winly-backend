@@ -1,5 +1,12 @@
-import { Link } from '@inertiajs/react';
-import { LayoutGrid, Settings2, Users } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    Activity,
+    LayoutGrid,
+    Settings2,
+    ShieldCheck,
+    UserCog,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -13,9 +20,42 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import {
+    circles as adminCircles,
+    dashboard as adminDashboard,
+    users as adminUsers,
+} from '@/routes/admin';
 import { index as circlesIndex } from '@/routes/circles';
 import { edit as editProfile } from '@/routes/profile';
 import type { NavGroup } from '@/types';
+
+/**
+ * The staff screens, shown only to staff.
+ *
+ * Kept out of `navGroups` rather than filtered inside it, so that for everybody
+ * else these entries are never built at all — a nav that quietly carried the
+ * admin routes and only hid them would be telling every member they exist.
+ */
+const adminGroup: NavGroup = {
+    label: 'Admin',
+    items: [
+        {
+            title: 'Platform health',
+            href: adminDashboard(),
+            icon: Activity,
+        },
+        {
+            title: 'People',
+            href: adminUsers(),
+            icon: UserCog,
+        },
+        {
+            title: 'All circles',
+            href: adminCircles(),
+            icon: ShieldCheck,
+        },
+    ],
+};
 
 const navGroups: NavGroup[] = [
     {
@@ -59,6 +99,22 @@ const navGroups: NavGroup[] = [
  * drops the fixed positioning that keeps the rail still while a page scrolls.
  */
 export function AppSidebar() {
+    const { auth } = usePage().props;
+
+    /*
+     * Staff get the admin entries instead of the member ones, not as well as
+     * them. "Platform health" is an admin's dashboard and "All circles" is
+     * their circle list — each a superset of the member entry it replaces, so
+     * keeping both would offer a choice between two doors to the same room.
+     *
+     * System sits last for staff. It is the one group that is about your own
+     * account rather than the platform, so it belongs under the work rather
+     * than above it.
+     */
+    const groups = auth.user?.is_admin
+        ? [adminGroup, ...navGroups.filter((group) => group.label === 'System')]
+        : navGroups;
+
     return (
         <Sidebar collapsible="icon">
             <SidebarHeader className="px-4 py-5">
@@ -78,7 +134,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent className="gap-6 px-2 py-2">
-                <NavMain groups={navGroups} />
+                <NavMain groups={groups} />
             </SidebarContent>
 
             <SidebarFooter className="border-t border-sidebar-border p-3">

@@ -214,6 +214,15 @@
     --series-meditation: #3ba776;
     --series-learning: #1f6ea8;
     --series-movement: #a37fdb;
+    /*
+     * The slice that means "somebody has to do something about this".
+     *
+     * Its own token rather than `--destructive`, which dresses buttons and
+     * error text all over the app: a chart slot has to sit in a lightness band
+     * against the plot surface, and retuning it here must not restyle every
+     * delete button in the product.
+     */
+    --series-attention: #c0483f;
 
     --radius: 0.5rem;
 
@@ -330,6 +339,9 @@
     --series-meditation: #3fa878;
     --series-learning: #2578a6;
     --series-movement: #9b80d2;
+    /* Stepped down from the dark `--destructive`, which sits just above the
+       lightness band a chart slot has to stay inside. */
+    --series-attention: #d66a61;
 
     /*
      * After dark the rail goes under the canvas rather than over it — the same
