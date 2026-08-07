@@ -91,6 +91,9 @@ class CircleController extends Controller
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
             'parent_id' => $parent?->getKey(),
+            // Absent is public. `boolean()` reads "1" and "true" off a form the
+            // same way it reads a JSON `true`.
+            'is_private' => $request->boolean('is_private'),
         ]);
 
         $circle->setAttribute('is_member', true);
@@ -159,6 +162,23 @@ class CircleController extends Controller
             if (array_key_exists($field, $attributes)) {
                 $circle->{$field} = $attributes[$field];
             }
+        }
+
+        /*
+         * Who may find it, when the form said so.
+         *
+         * Kept apart from the loop above because absent means something
+         * different here: a missing description is one nobody typed, while a
+         * missing flag is a client that does not know about visibility at all,
+         * and turning its circles public would be the one thing it never asked
+         * for.
+         *
+         * Going private stops the circle appearing in Discover and in search.
+         * It does not turn anybody out: the people inside were let in, and what
+         * is on the wall was shared with them.
+         */
+        if (array_key_exists('is_private', $attributes)) {
+            $circle->is_private = (bool) $attributes['is_private'];
         }
 
         $circle->save();

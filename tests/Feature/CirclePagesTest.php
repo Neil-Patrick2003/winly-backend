@@ -674,3 +674,30 @@ test('staff can invite somebody they do not follow', function () {
         ->post(route('circles.invitations.store', $this->circle), ['user_id' => $stranger->id])
         ->assertRedirect();
 });
+
+test('the posts tab keeps a public circle wall from a non-member', function () {
+    postInCircle($this->circle, $this->member, ['caption' => 'Sat for twenty.']);
+
+    /*
+     * Being let through the door is not being let to read everything behind
+     * it. A public circle admits anybody signed in, but a win on this wall was
+     * addressed to its *members* — `all_circles` is a different answer from
+     * `public`, and this page used to hand over the lot to whoever opened the
+     * URL, having joined nothing.
+     */
+    $stranger = User::factory()->create();
+
+    $this->actingAs($stranger)
+        ->get(route('circles.posts', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->component('circles/posts')->has('posts.data', 0));
+});
+
+test('the posts tab shuts a non-member out of a private circle entirely', function () {
+    postInCircle($this->circle, $this->member, ['caption' => 'Sat for twenty.']);
+    $this->circle->update(['is_private' => true]);
+
+    $this->actingAs(User::factory()->create())
+        ->get(route('circles.posts', $this->circle))
+        ->assertForbidden();
+});

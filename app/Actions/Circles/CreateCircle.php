@@ -29,7 +29,7 @@ class CreateCircle
      * would need explaining, and every count on the screen would have to
      * special-case it.
      *
-     * @param  array{name: string, description?: string|null, tag?: string|null, parent_id?: string|null}  $attributes
+     * @param  array{name: string, description?: string|null, tag?: string|null, parent_id?: string|null, is_private?: bool|null}  $attributes
      */
     public function execute(User $owner, array $attributes): Circle
     {
@@ -47,7 +47,9 @@ class CreateCircle
                 'tag' => $attributes['tag'] ?? null,
                 'icon_initial' => Str::upper(Str::substr($name, 0, 1)),
                 'color_hex' => $this->colourFor($name),
-                'is_private' => false,
+                // Public unless asked for otherwise, so a caller that says
+                // nothing about visibility keeps making what it always made.
+                'is_private' => (bool) ($attributes['is_private'] ?? false),
                 'members_count' => 1,
             ]);
 

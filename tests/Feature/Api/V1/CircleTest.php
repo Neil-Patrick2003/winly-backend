@@ -46,12 +46,20 @@ test('two circles cannot share a name', function () {
         ->assertJsonValidationErrors('name');
 });
 
-test('a private circle is refused rather than quietly made public', function () {
+test('a circle can be started private', function () {
     $this->postJson(route('api.v1.circles.store'), ['name' => 'Inner Ring', 'is_private' => true])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('is_private');
+        ->assertCreated()
+        ->assertJsonPath('data.is_private', true);
 
-    expect(Circle::count())->toBe(0);
+    expect(Circle::sole()->is_private)->toBeTrue();
+});
+
+test('a circle nobody said anything about is public', function () {
+    $this->postJson(route('api.v1.circles.store'), ['name' => 'Open House'])
+        ->assertCreated()
+        ->assertJsonPath('data.is_private', false);
+
+    expect(Circle::sole()->is_private)->toBeFalse();
 });
 
 test('the list carries the ones you made and the ones you joined, and nothing else', function () {
@@ -196,17 +204,35 @@ test('a rename cannot take a name another circle is using', function () {
     expect($mine->refresh()->name)->toBe('Runners');
 });
 
-test('a circle cannot be turned private on the way through', function () {
-    $circle = Circle::factory()->create(['owner_id' => $this->user->id]);
+test('a circle can be turned private and back again', function () {
+    $circle = Circle::factory()->create(['owner_id' => $this->user->id, 'is_private' => false]);
 
     $this->patchJson(route('api.v1.circles.update', $circle), [
         'name' => 'Inner Ring',
         'is_private' => true,
     ])
-        ->assertUnprocessable()
-        ->assertJsonValidationErrors('is_private');
+        ->assertOk()
+        ->assertJsonPath('data.is_private', true);
+
+    expect($circle->refresh()->is_private)->toBeTrue();
+
+    $this->patchJson(route('api.v1.circles.update', $circle), [
+        'name' => 'Inner Ring',
+        'is_private' => false,
+    ])->assertOk();
 
     expect($circle->refresh()->is_private)->toBeFalse();
+});
+
+test('a rename on its own leaves visibility alone', function () {
+    $circle = Circle::factory()->create(['owner_id' => $this->user->id, 'is_private' => true]);
+
+    // A client that knows nothing of visibility must not decide it by omission.
+    $this->patchJson(route('api.v1.circles.update', $circle), ['name' => 'Still Ours'])
+        ->assertOk()
+        ->assertJsonPath('data.is_private', true);
+
+    expect($circle->refresh()->is_private)->toBeTrue();
 });
 
 test('only the owner can change a circle, members included', function () {

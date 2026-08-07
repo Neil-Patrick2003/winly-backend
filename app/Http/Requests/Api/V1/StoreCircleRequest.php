@@ -59,16 +59,17 @@ class StoreCircleRequest extends FormRequest
                 Rule::exists('circles', 'id')->where('owner_id', $this->user()?->getKey()),
             ],
             /*
-             * Only public circles for now.
+             * Who may find it.
              *
-             * The column and the flag exist, so the shape of the request is
-             * already right; what is missing is everything private implies —
-             * the subscription that unlocks it and the features it buys. Until
-             * that lands, asking for one is refused rather than quietly
-             * downgraded, so a client is never told it made something it did
-             * not.
+             * Public is the default, and absent means public: every circle made
+             * before this field existed is one, and a client that does not know
+             * to send it must keep making the kind it has always made.
+             *
+             * A private circle is left out of Discover and out of search, so
+             * the only ways in are an invitation and a link from somebody
+             * already inside.
              */
-            'is_private' => ['nullable', 'boolean', Rule::in([false, 0, '0'])],
+            'is_private' => ['nullable', 'boolean'],
         ];
     }
 
@@ -81,7 +82,6 @@ class StoreCircleRequest extends FormRequest
     {
         return [
             'name.unique' => 'A circle already goes by that name.',
-            'is_private.in' => 'Private circles are not available yet.',
         ];
     }
 }

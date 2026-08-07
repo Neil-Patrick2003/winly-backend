@@ -115,9 +115,17 @@ class DiscoverController extends Controller
 
         return response()->json([
             'data' => [
-                // Every tag in use, not only those on the circles above — the
-                // chips are how somebody reaches the ones that did not make it.
+                /*
+                 * Every tag in use, not only those on the circles above — the
+                 * chips are how somebody reaches the ones that did not make it.
+                 *
+                 * Public circles only, like the list itself. A tag worn by
+                 * nothing else is a private circle announcing its subject, and
+                 * a chip that selects an empty list is the app saying there is
+                 * something here you cannot see.
+                 */
                 'tags' => Circle::query()
+                    ->where('is_private', false)
                     ->whereNotNull('tag')
                     ->distinct()
                     ->orderBy('tag')

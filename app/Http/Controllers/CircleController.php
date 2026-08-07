@@ -212,6 +212,21 @@ class CircleController extends Controller
         $viewer = $request->user();
 
         $posts = $circle->posts()
+            /*
+             * Being allowed through the door is not being allowed to read
+             * everything behind it.
+             *
+             * A public circle admits anybody signed in, member or not — that is
+             * what the gate above means. But a win on this wall was addressed
+             * to the circle's *members*, and `all_circles` is a different
+             * answer from `public`. Without this a stranger could read a whole
+             * group's wins by opening its URL, having joined nothing.
+             *
+             * The same filter the API's circle wall has always applied. The two
+             * read the same rows now, which is what stops one of them being the
+             * way round the other.
+             */
+            ->visibleTo($viewer)
             ->with([
                 'user',
                 'winMeditation.media',

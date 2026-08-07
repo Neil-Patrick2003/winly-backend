@@ -94,6 +94,26 @@ test('circles come back biggest first, with where the reader stands on each', fu
         ->and($circles->firstWhere('id', $big->id)['is_member'])->toBeFalse();
 });
 
+test('a private circle is neither listed nor findable, not even by its members', function () {
+    $open = Circle::factory()->create(['name' => 'Sunrise Runners', 'is_private' => false]);
+    $hidden = Circle::factory()->create(['name' => 'Sunrise Inner Ring', 'is_private' => true]);
+
+    // Being in it does not put it here: this list is for finding circles you
+    // are not in, and the reader reaches their own from My Circles.
+    CircleMembership::factory()->create(['user_id' => $this->user->id, 'circle_id' => $hidden->id]);
+
+    $browsing = collect($this->getJson(route('api.v1.discover'))->assertOk()->json('data.circles'));
+
+    expect($browsing->pluck('id')->all())->toBe([$open->id]);
+
+    // And searching its name by heart turns up nothing either.
+    $searched = collect(
+        $this->getJson(route('api.v1.discover', ['q' => 'sunrise']))->assertOk()->json('data.circles')
+    );
+
+    expect($searched->pluck('id')->all())->toBe([$open->id]);
+});
+
 test('the tag chips list every tag in use', function () {
     Circle::factory()->create(['tag' => 'fitness']);
     Circle::factory()->create(['tag' => 'reading']);
@@ -103,6 +123,15 @@ test('the tag chips list every tag in use', function () {
     $this->getJson(route('api.v1.discover'))
         ->assertOk()
         ->assertJsonPath('data.tags', ['fitness', 'reading']);
+});
+
+test('a private circle does not announce its subject through the tag chips', function () {
+    Circle::factory()->create(['tag' => 'fitness', 'is_private' => false]);
+    Circle::factory()->create(['tag' => 'divorce-support', 'is_private' => true]);
+
+    $this->getJson(route('api.v1.discover'))
+        ->assertOk()
+        ->assertJsonPath('data.tags', ['fitness']);
 });
 
 test('a tag narrows the circles and leaves the people alone', function () {
