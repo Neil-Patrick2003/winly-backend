@@ -14,6 +14,7 @@ use App\Http\Resources\Api\V1\CircleResource;
 use App\Http\Resources\Api\V1\UserSummaryResource;
 use App\Models\Circle;
 use App\Models\CircleMembership;
+use App\Models\Post;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -112,6 +113,8 @@ class CircleController extends Controller
             'is_member',
             $circle->memberships()->where('user_id', $viewer->getKey())->exists(),
         );
+
+        $circle->setAttribute('syncable_posts_count', $this->syncablePostCount($viewer, $circle));
 
         // The parent rides along so a sub-circle's screen can name the circle
         // it sits inside without a second request to find out.
@@ -368,6 +371,80 @@ class CircleController extends Controller
         }
 
         return $parent;
+    }
+
+    /**
+     * How many of this person's own wins are not on this circle's wall yet.
+     *
+     * A win is placed in the circles its author was in *at the time*, because
+     * that is what sharing to your circles meant when they pressed the button.
+     * Joining a circle afterwards does not reach back — so somebody who has
+     * been posting for months walks into a new circle with none of it, and the
+     * wall says they have never shared a thing.
+     *
+     * Every win of theirs counts, whatever it was shared to. This was public
+     * ones only, on the grounds that a win told to one small group is that
+     * group's — but in practice almost nothing is public (the compose screen
+     * shares to your circles, and to one circle when you start from its own
+     * screen), so the offer was never made to anybody. Widening it does not
+     * move a win anywhere on its own: the author is standing in the circle
+     * asking for it, which is the same act as picking that circle when they
+     * wrote it, and the confirm says plainly what is about to be added.
+     */
+    protected function syncablePostCount(User $user, Circle $circle): int
+    {
+        return $this->syncablePosts($user, $circle)->count();
+    }
+
+    /**
+     * Those same wins, as a query.
+     *
+     * @return Builder<Post>
+     */
+    protected function syncablePosts(User $user, Circle $circle): Builder
+    {
+        return Post::query()
+            ->where('user_id', $user->getKey())
+            ->whereDoesntHave('circles', fn (Builder $in) => $in->whereKey($circle->getKey()));
+    }
+
+    /**
+     * Put this person's earlier wins on the circle's wall.
+     *
+     * Members only: adding to a group's wall is something you do from inside
+     * it, and it is their own wins alone — nobody hands somebody else's win to
+     * a room. Idempotent by way of `syncWithoutDetaching`, so a second press adds
+     * nothing and a double tap is not two of everything — and it never detaches
+     * what is already there, which would quietly unshare the wins somebody
+     * posted into this circle deliberately.
+     */
+    public function syncMyPosts(Request $request, Circle $circle): JsonResponse
+    {
+        Gate::authorize('view', $circle);
+
+        $user = $request->user();
+
+        if (! $circle->memberships()->where('user_id', $user->getKey())->exists()) {
+            throw ValidationException::withMessages([
+                'circle' => 'Join the circle before sharing your wins into it.',
+            ]);
+        }
+
+        $ids = $this->syncablePosts($user, $circle)->pluck('id')->all();
+
+        if ($ids !== []) {
+            $circle->posts()->syncWithoutDetaching($ids);
+        }
+
+        return response()->json([
+            'data' => [
+                'id' => $circle->getKey(),
+                'shared' => count($ids),
+                // Nought by definition once they are on the wall, and sent so
+                // the screen can put the button away without asking again.
+                'syncable_posts_count' => 0,
+            ],
+        ]);
     }
 
     /**

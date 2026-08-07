@@ -388,14 +388,16 @@ class PostController extends Controller
     /**
      * The circles a post should sit in, given who it is for.
      *
-     * Public and "all circles" put the win in the same places — every circle
-     * the author is in. They differ in who else may read it: public is open to
-     * anybody, and "all circles" is the same reach kept to members.
+     * Public belongs to no circle. It is readable by everybody, which is a
+     * different thing from being on a particular group's wall — that wall is
+     * meant to be what the group was actually given, and a win that went out to
+     * the world is not that. Putting one there is a second, deliberate act:
+     * the circle's own screen offers it, for every public win not on it yet.
      *
-     * Both are resolved here, once, to the circles the author is in at this
-     * moment, and then they are just a list like any other. That is what makes
-     * the setting a snapshot rather than a standing instruction: joining a
-     * circle next month cannot reach back and hand it this win.
+     * "All circles" is resolved here, once, to the circles the author is in at
+     * this moment, and is then just a list like any other. That is what makes
+     * it a snapshot rather than a standing instruction: joining a circle next
+     * month cannot reach back and hand it this win.
      *
      * @param  list<string>  $chosen  The ids named by the author, when they
      *                                picked the circles themselves.
@@ -404,7 +406,8 @@ class PostController extends Controller
     protected function circlesFor(User $author, string $visibility, array $chosen): array
     {
         return match ($visibility) {
-            Post::VISIBILITY_PUBLIC, Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
+            Post::VISIBILITY_PUBLIC => [],
+            Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
                 strval(...),
                 $author->circles()->pluck('circles.id')->all(),
             )),

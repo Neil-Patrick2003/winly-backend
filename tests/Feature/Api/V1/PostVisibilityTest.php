@@ -161,7 +161,7 @@ test('a kept win drops out of the pile once the reader leaves the circle', funct
     $this->getJson(route('api.v1.posts.saved'))->assertOk()->assertJsonCount(0, 'data');
 });
 
-test('sharing publicly also puts the win in every circle you are in', function () {
+test('sharing publicly places the win in no circle', function () {
     Sanctum::actingAs($this->author);
 
     $this->postJson(route('api.v1.posts.store'), [
@@ -170,21 +170,17 @@ test('sharing publicly also puts the win in every circle you are in', function (
     ])
         ->assertCreated()
         ->assertJsonPath('data.visibility', 'public')
-        // Open to everybody *and* on the wall of the circle its author is in.
-        // Sharing widely is not a reason to withhold it from your own groups.
-        ->assertJsonCount(1, 'data.circles');
+        // Readable by everybody, and on nobody's wall. A circle's wall is what
+        // that group was given; putting a public win there is a second act, and
+        // the circle's own screen is where it is offered.
+        ->assertJsonCount(0, 'data.circles');
 
     $post = Post::sole();
 
-    expect($post->circles()->count())->toBe(1);
+    expect($post->circles()->count())->toBe(0);
 
     Sanctum::actingAs($this->stranger);
     $this->getJson(route('api.v1.posts.show', $post))->assertOk();
-
-    Sanctum::actingAs($this->member);
-    $this->getJson(route('api.v1.circles.posts', $this->circle))
-        ->assertOk()
-        ->assertJsonPath('data.0.id', $post->id);
 });
 
 test('sharing with all circles resolves to the ones the author is in now', function () {
@@ -280,7 +276,7 @@ test('narrowing a public win to a circle hides it from everyone else', function 
     $this->getJson(route('api.v1.posts.show', $post))->assertOk();
 });
 
-test('opening a circle win to the public keeps it on the circle wall', function () {
+test('changing a circle win to public takes it off that wall', function () {
     $post = circlePost();
 
     Sanctum::actingAs($this->author);
@@ -289,9 +285,16 @@ test('opening a circle win to the public keeps it on the circle wall', function 
         'wins' => [['type' => 'movement', 'movement_type' => 'run']],
     ])->assertOk();
 
-    // Widening who may read it does not take it away from the group that
-    // already had it.
-    expect($post->fresh()->circles()->count())->toBe(1);
+    /*
+     * Public means readable by everybody and placed in no circle, so choosing
+     * it is choosing both halves — the win comes off the wall it was on.
+     *
+     * Recorded here because it is the surprising half of the rule: a post
+     * deliberately given to one group leaves that group when it is opened up.
+     * The circle's own screen is how it goes back, for this win and every other
+     * public one not on that wall.
+     */
+    expect($post->fresh()->circles()->count())->toBe(0);
 
     Sanctum::actingAs($this->stranger);
     $this->getJson(route('api.v1.posts.show', $post))->assertOk();

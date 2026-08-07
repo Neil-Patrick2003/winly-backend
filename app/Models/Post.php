@@ -46,11 +46,12 @@ class Post extends Model
     public const WIN_TYPES = ['meditation', 'learning', 'movement'];
 
     /**
-     * Anyone at all, and placed in every circle its author is in.
+     * Anyone at all, and placed in no circle.
      *
-     * The widest of the three: it reaches the same circles `all_circles` does
-     * and is readable by everybody besides. Sharing openly does not mean
-     * withholding it from your own groups.
+     * Readable by everybody is a different thing from being on a particular
+     * group's wall: that wall is what the group was actually given. A public
+     * win reaches a circle only when its author puts it there, which the
+     * circle's own screen offers for every one not on it yet.
      */
     public const VISIBILITY_PUBLIC = 'public';
 

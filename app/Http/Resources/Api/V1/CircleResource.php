@@ -48,6 +48,17 @@ class CircleResource extends JsonResource
             ]),
             'members_count' => $this->members_count,
             /*
+             * How many of the reader's own wins are not on this wall yet.
+             *
+             * Absent where the endpoint did not work it out — a list of circles
+             * would be a query each, and the answer is only needed on the one
+             * screen that offers to do something about it.
+             */
+            'syncable_posts_count' => $this->whenHas(
+                'syncable_posts_count',
+                fn (mixed $value): int => (int) $value,
+            ),
+            /*
              * How much has been shared into it.
              *
              * Counted per query rather than kept in a column beside
