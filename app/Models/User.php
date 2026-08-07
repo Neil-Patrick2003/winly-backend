@@ -30,6 +30,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $username
  * @property string $email
  * @property Carbon|null $email_verified_at
+ * @property Carbon|null $terms_accepted_at
  * @property string $password_hash
  * @property-read string|null $avatar_url
  * @property string|null $bio
@@ -52,7 +53,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
  */
-#[Fillable(['full_name', 'username', 'email', 'password_hash', 'bio', 'cover_gradient', 'is_private', 'is_admin', 'last_active_at'])]
+#[Fillable(['full_name', 'username', 'email', 'password_hash', 'bio', 'cover_gradient', 'is_private', 'is_admin', 'last_active_at', 'terms_accepted_at'])]
 #[Hidden(['password_hash', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token', 'media'])]
 class User extends Authenticatable implements HasMedia, PasskeyUser
 {
@@ -138,6 +139,7 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
             'password_hash' => 'hashed',
             'streak_days' => 'integer',
             'longest_streak' => 'integer',

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Api\V1\Auth\NewPasswordController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetCodeController;
@@ -9,12 +10,14 @@ use App\Http\Controllers\Api\V1\CircleInvitationController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\DiscoverController;
 use App\Http\Controllers\Api\V1\FollowController;
+use App\Http\Controllers\Api\V1\LegalController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProgressController;
 use App\Http\Controllers\Api\V1\PushTokenController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SavedPostController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
@@ -49,6 +52,16 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         ->middleware('throttle:6,1')
         ->name('password.update');
 
+    /*
+     * The Terms and the Privacy Policy, as structure the app draws natively.
+     *
+     * Outside the authenticated group: the screen that reads it is reached from
+     * sign-up, and nobody has an account at the moment they are deciding
+     * whether to agree.
+     */
+    Route::get('legal', [LegalController::class, 'index'])
+        ->name('legal.index');
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
             ->name('logout');
@@ -56,6 +69,25 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('user', fn (Request $request) => new UserResource(
             $request->user()->loadActiveStory()->loadNewStoryActivity()->loadCount('posts')
         ))->name('user');
+
+        /*
+         * Closing the account. Required by the App Store of anything that lets
+         * you open one, and it takes the content with it.
+         *
+         * Throttled hard: there is no reason to ask twice, and the limit is
+         * what stops somebody guessing at the password it asks for.
+         */
+        Route::delete('user', [AccountController::class, 'destroy'])
+            ->middleware('throttle:6,1')
+            ->name('user.destroy');
+
+        /*
+         * Flagging content or a person for staff. Nothing is hidden by making
+         * one — it puts a row on a queue.
+         */
+        Route::post('reports', [ReportController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('reports.store');
 
         Route::get('stories', [StoryController::class, 'index'])
             ->name('stories.index');

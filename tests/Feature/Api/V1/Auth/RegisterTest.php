@@ -16,6 +16,7 @@ function registrationPayload(array $overrides = []): array
         'password' => 'password-password',
         'password_confirmation' => 'password-password',
         'device_name' => 'iPhone 17',
+        'terms_accepted' => true,
     ], $overrides);
 }
 
@@ -151,4 +152,52 @@ test('the rule is the same one the app is told about', function () {
     // it, so it is what keeps the two from drifting apart again.
     expect(Password::defaults()->toPasswordRulesString())
         ->toBe('minlength: 8;');
+});
+
+/*
+ * Accepting the terms.
+ *
+ * The checkbox on the sign-up screen gates the button, but the button is not
+ * what decides it — these cover the server refusing on its own account, and
+ * recording the acceptance in a way that can be produced later.
+ */
+test('registering records when the terms were accepted', function () {
+    $this->travelTo(now()->startOfSecond());
+
+    $this->postJson(route('api.v1.register'), registrationPayload())->assertCreated();
+
+    $user = User::firstWhere('email', 'neil@example.com');
+
+    expect($user->terms_accepted_at)->not->toBeNull();
+    expect($user->terms_accepted_at->timestamp)->toBe(now()->timestamp);
+});
+
+test('registration is refused without accepting the terms', function () {
+    $payload = registrationPayload();
+    unset($payload['terms_accepted']);
+
+    $this->postJson(route('api.v1.register'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('terms_accepted');
+
+    expect(User::count())->toBe(0);
+});
+
+test('sending the terms flag as false is not accepting them', function () {
+    $this->postJson(route('api.v1.register'), registrationPayload(['terms_accepted' => false]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('terms_accepted');
+
+    expect(User::count())->toBe(0);
+});
+
+test('the acceptance timestamp is the server clock, not the client', function () {
+    // A date the client can set is not evidence of anything, so one sent along
+    // with the request is ignored rather than trusted.
+    $this->postJson(route('api.v1.register'), registrationPayload([
+        'terms_accepted_at' => '1999-01-01 00:00:00',
+    ]))->assertCreated();
+
+    expect(User::firstWhere('email', 'neil@example.com')->terms_accepted_at->year)
+        ->toBe(now()->year);
 });

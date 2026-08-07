@@ -26,11 +26,31 @@ use App\Http\Controllers\Dashboard\MemberOverviewController;
 use App\Http\Controllers\Dashboard\MembersStatController;
 use App\Http\Controllers\Dashboard\MyCirclesController;
 use App\Http\Controllers\Dashboard\StreakLeadersController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\PostCommentController;
 use App\Http\Controllers\PostLikeController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
+
+/*
+ * The Terms and the Privacy Policy.
+ *
+ * Public, unauthenticated and outside the Inertia app: these two URLs go into
+ * App Store Connect and into the sign-up screen, so they have to answer for a
+ * reviewer, a crawler, or somebody who has not signed in — none of whom should
+ * need a JavaScript bundle to boot before they can read a policy.
+ *
+ * The wording is in `resources/views/legal`; the details it is written around
+ * are in `config/legal.php`.
+ */
+Route::get('/terms', [LegalController::class, 'show'])
+    ->defaults('document', 'terms')
+    ->name('legal.terms');
+
+Route::get('/privacy', [LegalController::class, 'show'])
+    ->defaults('document', 'privacy')
+    ->name('legal.privacy');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     /*

@@ -20,6 +20,12 @@ class RegisteredUserController extends Controller
         $user = DB::transaction(fn (): User => User::create([
             ...$request->safe()->only(['full_name', 'username', 'email']),
             'password_hash' => $request->string('password')->value(),
+            /*
+             * Stamped here rather than taken from the request: the client says
+             * whether the box was ticked, and the server says when. A date the
+             * client could set is not evidence of anything.
+             */
+            'terms_accepted_at' => now(),
         ]));
 
         event(new Registered($user));
