@@ -240,6 +240,12 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
             ->middleware('throttle:60,1')
             ->name('users.unfollow');
 
+        // Who liked it, for anyone who may read the post. Plural, so it does
+        // not collide with the singular `posts/{post}/like` the caller acts on
+        // their own like through.
+        Route::get('posts/{post}/likes', [PostLikeController::class, 'index'])
+            ->name('posts.likes');
+
         Route::put('posts/{post}/like', [PostLikeController::class, 'store'])
             ->middleware('throttle:120,1')
             ->name('posts.like');

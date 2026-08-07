@@ -4,15 +4,52 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\RecordNotification;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\IndexPostLikeRequest;
 use App\Http\Resources\Api\V1\PostLikeResource;
+use App\Http\Resources\Api\V1\PostLikerResource;
 use App\Models\Post;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 class PostLikeController extends Controller
 {
+    /**
+     * List who liked a post, most recent first.
+     *
+     * Gated on reading the post rather than on owning it, which is the
+     * difference between this and a story's viewer list: who watched something
+     * that disappears in a day is the poster's business alone, while a like is
+     * a public act on a post — anybody who can see the post can see it was
+     * liked, so telling them by whom reveals nothing the count did not.
+     *
+     * @return AnonymousResourceCollection<int, PostLikerResource>
+     */
+    public function index(IndexPostLikeRequest $request, Post $post): AnonymousResourceCollection
+    {
+        Gate::authorize('view', $post);
+
+        $reader = $request->user();
+
+        $likes = $post->likes()
+            ->with(['user' => fn (Relation $query) => $query
+                ->withActiveStory()
+                ->withUnseenStory($reader)
+                ->with(['followers' => fn (Relation $followers) => $followers->whereKey($reader->getKey())]),
+            ])
+            // The like id breaks ties, so a cursor still has something unique
+            // to sit on when two people tap within the same second.
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->cursorPaginate($request->perPage())
+            ->withQueryString();
+
+        return PostLikerResource::collection($likes);
+    }
+
     /**
      * Like a post.
      *
