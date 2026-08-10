@@ -4,6 +4,7 @@ use App\Actions\SendPasswordResetCode;
 use App\Models\User;
 use App\Notifications\ResetPasswordCode;
 use Illuminate\Contracts\Notifications\Dispatcher;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -112,6 +113,44 @@ test('a failed send leaves nothing behind to throttle the next attempt', functio
     // code that never arrived.
     expect(DB::table('password_reset_tokens')->where('email', 'neil@example.com')->count())->toBe(0);
     expect(app(SendPasswordResetCode::class)->throttled($this->user))->toBeFalse();
+});
+
+test('the code email is queued rather than sent inside the request', function () {
+    // The SMTP handoff is the slowest thing in the endpoint and nothing in the
+    // response depends on it, so the request must not be waiting on it.
+    $this->postJson(route('api.v1.password.email'), ['email' => 'neil@example.com'])->assertOk();
+
+    Notification::assertSentTo(
+        $this->user,
+        ResetPasswordCode::class,
+        fn (ResetPasswordCode $notification): bool => $notification instanceof ShouldQueue,
+    );
+});
+
+test('a send given up on by the worker leaves nothing behind to throttle the next attempt', function () {
+    $code = requestCode($this->user);
+
+    // What the queue does after the last retry: the row is still there, and
+    // clearing it is the only thing standing between the person and a retry
+    // that gets silently swallowed by the throttle.
+    (new ResetPasswordCode($code, 'neil@example.com'))->failed(new RuntimeException('relay refused'));
+
+    expect(DB::table('password_reset_tokens')->where('email', 'neil@example.com')->count())->toBe(0);
+    expect(app(SendPasswordResetCode::class)->throttled($this->user))->toBeFalse();
+});
+
+test('a late failure does not clear a newer code that replaced it', function () {
+    $stale = requestCode($this->user);
+
+    $this->travel(SendPasswordResetCode::THROTTLE_SECONDS + 1)->seconds();
+    $this->postJson(route('api.v1.password.email'), ['email' => 'neil@example.com'])->assertOk();
+
+    // The first send is given up on only now, after a second code has taken
+    // its place. Clearing by address alone would take a live code away from
+    // somebody already typing it in.
+    (new ResetPasswordCode($stale, 'neil@example.com'))->failed(new RuntimeException('relay refused'));
+
+    expect(DB::table('password_reset_tokens')->where('email', 'neil@example.com')->count())->toBe(1);
 });
 
 test('another code can be sent once the throttle window has passed', function () {

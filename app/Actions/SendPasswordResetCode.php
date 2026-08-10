@@ -21,6 +21,10 @@ use Throwable;
  * Only the hash is stored. A leaked database read yields nothing that can be
  * typed into the app, which matters more here than for Laravel's own random
  * tokens: six digits are guessable if you can see them being compared.
+ *
+ * The mail itself goes out on the queue — see `ResetPasswordCode`. This action
+ * still owns the row either way, so both the enqueue failing here and the send
+ * failing in the worker come back through `discard()`.
  */
 class SendPasswordResetCode
 {
@@ -62,7 +66,7 @@ class SendPasswordResetCode
         );
 
         try {
-            $user->notify(new ResetPasswordCode($code));
+            $user->notify(new ResetPasswordCode($code, $user->email));
         } catch (Throwable $failure) {
             /*
              * The row has to be written before the send — a code that reached
@@ -74,11 +78,38 @@ class SendPasswordResetCode
              *
              * Undoing it costs nothing: nothing was delivered, so there is no
              * code out there for this row to be the record of.
+             *
+             * The notification is queued, so what reaches here is a failure to
+             * *enqueue* — the queue's own connection being down. A relay that
+             * refuses the mail fails in the worker instead, and clears the row
+             * through `ResetPasswordCode::failed()`, which calls `discard()`
+             * below for the same reason.
              */
-            DB::table($this->table())->where('email', $user->email)->delete();
+            $this->discard($user->email, $code);
 
             throw $failure;
         }
+    }
+
+    /**
+     * Drop the stored row for a code that never reached anybody.
+     *
+     * Matched on the hash rather than the address alone. A queued send is
+     * given up on some way after it was asked for, by which time the throttle
+     * window may have passed and a second, working code may have replaced this
+     * one — and a late failure that cleared *that* row would take a live code
+     * away from somebody in the middle of using it. Only the row this code
+     * wrote is its to remove.
+     */
+    public function discard(string $email, string $code): void
+    {
+        $record = DB::table($this->table())->where('email', $email)->first();
+
+        if ($record === null || ! Hash::check($code, $record->token)) {
+            return;
+        }
+
+        DB::table($this->table())->where('email', $email)->delete();
     }
 
     /**
