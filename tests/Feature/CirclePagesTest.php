@@ -360,6 +360,42 @@ test('the owner can rename the circle', function () {
     expect($this->circle->refresh()->name)->toBe('Evening Sitters');
 });
 
+test('the owner can turn the circle private from the manage page', function () {
+    // "1"/"0" is what the radio posts, and the `boolean` rule takes both.
+    $this->actingAs($this->owner)
+        ->patch(route('circles.manage.update', $this->circle), [
+            'name' => 'Morning Sitters',
+            'icon_initial' => 'MS',
+            'color_hex' => '#4F46E5',
+            'is_private' => '1',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($this->circle->refresh()->is_private)->toBeTrue();
+
+    $this->actingAs($this->owner)
+        ->patch(route('circles.manage.update', $this->circle), [
+            'name' => 'Morning Sitters',
+            'icon_initial' => 'MS',
+            'color_hex' => '#4F46E5',
+            'is_private' => '0',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($this->circle->refresh()->is_private)->toBeFalse();
+});
+
+test('the manage page is told whether the circle is private', function () {
+    $this->circle->update(['is_private' => true]);
+
+    // Without this the form has nothing to set the radio from, and a private
+    // circle opens its own settings claiming to be public.
+    $this->actingAs($this->owner)
+        ->get(route('circles.manage', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('circle.is_private', true));
+});
+
 test('a member cannot rename the circle', function () {
     $this->actingAs($this->member)
         ->patch(route('circles.manage.update', $this->circle), [
@@ -640,6 +676,21 @@ test('staff can open a circle inside one they do not own', function () {
         ->assertRedirect();
 
     expect($this->circle->subCircles()->where('name', 'Staff Made')->exists())->toBeTrue();
+});
+
+test('a circle opened inside another can be private on its own', function () {
+    // Its own answer, not the parent's: a private room inside a public house is
+    // the whole reason for the smaller room.
+    $this->actingAs($this->owner)
+        ->post(route('circles.sub.store', $this->circle), [
+            'name' => 'Inner Quiet',
+            'is_private' => '1',
+        ])
+        ->assertRedirect();
+
+    expect($this->circle->subCircles()->where('name', 'Inner Quiet')->sole()->is_private)
+        ->toBeTrue()
+        ->and($this->circle->refresh()->is_private)->toBeFalse();
 });
 
 test('staff see the sub-circle tools on somebody else circle', function () {

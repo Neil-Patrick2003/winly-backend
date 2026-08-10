@@ -140,6 +140,10 @@ class CircleController extends Controller
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
+            // Staff choose it on the owner's behalf, the same as the name: a
+            // circle opened for somebody should arrive set up the way they
+            // asked for it rather than needing a first edit to put right.
+            'is_private' => $request->boolean('is_private'),
         ]);
 
         Inertia::flash('toast', [

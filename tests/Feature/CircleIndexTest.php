@@ -162,6 +162,25 @@ test('a member can start a circle and lands inside it', function () {
         ->exists())->toBeTrue();
 });
 
+test('a circle started from the web can be made private', function () {
+    // "1" rather than true, because that is what the radio on the form posts.
+    $this->actingAs($this->user)
+        ->post(route('circles.store'), ['name' => 'Quiet Room', 'is_private' => '1'])
+        ->assertRedirect();
+
+    expect(Circle::where('name', 'Quiet Room')->sole()->is_private)->toBeTrue();
+});
+
+test('a circle started from the web is public when nothing is said', function () {
+    // Every circle made before the choice existed is a public one, and a form
+    // that does not know to send it must keep making the kind it always made.
+    $this->actingAs($this->user)
+        ->post(route('circles.store'), ['name' => 'Open Room'])
+        ->assertRedirect();
+
+    expect(Circle::where('name', 'Open Room')->sole()->is_private)->toBeFalse();
+});
+
 test('two circles cannot share a name', function () {
     $this->actingAs($this->user)
         ->post(route('circles.store'), ['name' => 'Morning Movers'])

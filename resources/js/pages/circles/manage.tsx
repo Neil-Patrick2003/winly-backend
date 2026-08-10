@@ -3,6 +3,7 @@ import { Ban, Crown, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import CircleManagementController from '@/actions/App/Http/Controllers/CircleManagementController';
 import { CircleBadge } from '@/components/circle-badge';
+import { CircleVisibilityField } from '@/components/circle-visibility-field';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import InputError from '@/components/input-error';
@@ -305,6 +306,20 @@ export default function Manage({
                                                 />
                                             </div>
                                         </div>
+
+                                        {/* Uncontrolled, like every other box
+                                            on this form: the radio's own `name`
+                                            is what carries the answer, so there
+                                            is nothing to keep in step. */}
+                                        <CircleVisibilityField
+                                            defaultPrivate={
+                                                circle.is_private ?? false
+                                            }
+                                            disabled={processing}
+                                        />
+                                        <InputError
+                                            message={errors.is_private}
+                                        />
 
                                         <Button
                                             type="submit"

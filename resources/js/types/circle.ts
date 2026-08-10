@@ -20,6 +20,14 @@ export type CircleHeader = CircleSummary & {
     description: string | null;
     tag: string | null;
     members_count: number;
+    /**
+     * Whether the circle is kept out of Discover and out of search.
+     *
+     * Optional because only the manage page is told: the lists and cards that
+     * share this type render circles the reader already belongs to, where being
+     * findable by strangers is not a thing they say about themselves.
+     */
+    is_private?: boolean;
     /** Staff only — handing a circle on is not the owner's to do. */
     can_transfer_ownership?: boolean;
     /** Who runs it. Null for a circle nobody owns. */
