@@ -470,10 +470,16 @@ class CircleController extends Controller
     /**
      * The circles inside one circle.
      *
-     * Answered to anybody who may see the parent, because a sub-circle is part
-     * of what the parent is: knowing a circle has a beginners' circle inside is
-     * not the same as being able to read it, and the wall behind each one is
-     * still its own to gate.
+     * The public ones are answered to anybody who may see the parent, because a
+     * sub-circle is part of what the parent is: knowing a circle has a
+     * beginners' circle inside is not the same as being able to read it, and
+     * the wall behind each one is still its own to gate.
+     *
+     * A private one is different, and is left out unless the reader is already
+     * in it. Private means not listed — the same rule Discover and search
+     * follow — and a name is not nothing: "Relapse support" sitting in a public
+     * parent tells everyone who reads the list that it exists and roughly who
+     * it is for, which is most of what its members were promised privacy about.
      *
      * Not paginated. A circle with more inside it than fits in one answer is
      * not a shape this is built for, and the cap says so rather than pretending.
@@ -487,6 +493,17 @@ class CircleController extends Controller
         $viewer = $request->user();
 
         $inner = $circle->subCircles()
+            // Grouped, and it has to be: left flat, the `orWhere`s would bind
+            // looser than the parent-id constraint the relation already added
+            // and this would answer with sub-circles of every other circle too.
+            ->where(function (Builder $query) use ($viewer): void {
+                $query->where('is_private', false)
+                    ->orWhere('owner_id', $viewer->getKey())
+                    ->orWhereHas(
+                        'memberships',
+                        fn (Builder $member) => $member->where('user_id', $viewer->getKey()),
+                    );
+            })
             ->withExists([
                 'memberships as is_member' => fn (Builder $member) => $member
                     ->where('user_id', $viewer->getKey()),
