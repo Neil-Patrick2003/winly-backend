@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Concerns\ScopesToOwnedCircles;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Day;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,9 @@ class StreakLeadersController extends Controller
      */
     public function __invoke(Request $request): JsonResponse
     {
-        $today = now()->toDateString();
+        // The day on the display clock. `last_win_on` is written on it, so a
+        // UTC date here marks the wrong people as having logged today.
+        $today = Day::now()->toDateString();
 
         $leaders = $this->membersOnAStreak($request->user())
             ->orderByDesc('streak_days')

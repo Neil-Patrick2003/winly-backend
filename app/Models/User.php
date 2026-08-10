@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Concerns\ServesMediaUrls;
+use App\Support\Day;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -334,13 +335,19 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
      */
     public function currentStreak(?Carbon $on = null): int
     {
-        $lastWin = $this->last_win_on?->copy()->startOfDay();
-
-        if ($lastWin === null) {
+        if ($this->last_win_on === null) {
             return 0;
         }
 
-        $yesterday = ($on ?? Carbon::now())->copy()->startOfDay()->subDay();
+        // Rebuilt on the display clock, not converted onto it — see
+        // `Day::startOfDate`. The stored value is a calendar date.
+        $lastWin = Day::startOfDate($this->last_win_on);
+
+        // Judged on the display clock, not UTC. In UTC+8 a UTC midnight falls
+        // at eight in the morning, so a streak measured there survives most of
+        // a day it should already have lost — and expires mid-morning rather
+        // than at the midnight the person actually kept it through.
+        $yesterday = Day::startOf($on)->subDay();
 
         return $lastWin->greaterThanOrEqualTo($yesterday)
             ? $this->streak_days

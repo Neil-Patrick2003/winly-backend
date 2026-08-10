@@ -5,6 +5,7 @@ use App\Models\Follow;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /*
@@ -89,4 +90,29 @@ function befriend(User $a, User $b): void
 {
     Follow::factory()->from($a)->to($b)->create();
     Follow::factory()->from($b)->to($a)->create();
+}
+
+/**
+ * A moment on the clock days are measured on.
+ *
+ * Day boundaries are cut on the display timezone, not UTC, so times authored
+ * in UTC straddle the wrong midnight — at UTC+8, six in the evening UTC is two
+ * the next morning, and a win written that way lands on the day after the one
+ * the test means.
+ */
+function atLocal(string $time): Carbon
+{
+    return Carbon::parse($time, config('app.display_timezone'));
+}
+
+/**
+ * The same moment, ready to be written to a column.
+ *
+ * Eloquent stores whatever wall clock the instance carries and reads it back
+ * as UTC, so a local time assigned straight to an attribute lands eight hours
+ * out. Converting first keeps the stored instant the one that was meant.
+ */
+function storedAtLocal(string $time): Carbon
+{
+    return atLocal($time)->utc();
 }

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Admin\Stats;
 
+use App\Concerns\GroupsByLocalDay;
 use App\Concerns\ResolvesStatWindow;
 use App\Http\Controllers\Controller;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  */
 class WinMixController extends Controller
 {
-    use ResolvesStatWindow;
+    use GroupsByLocalDay, ResolvesStatWindow;
 
     /**
      * The detail table behind each pillar.
@@ -53,8 +55,8 @@ class WinMixController extends Controller
 
         return response()->json([
             'days' => $days,
-            'from' => $windowStart->toDateString(),
-            'to' => $windowEnd->toDateString(),
+            'from' => Day::dateOf($windowStart),
+            'to' => Day::dateOf($windowEnd),
             'series' => array_keys(self::WIN_TABLES),
             'points' => $this->fillCalendar($counts, $windowStart, $days),
         ]);
@@ -63,8 +65,9 @@ class WinMixController extends Controller
     /**
      * Distinct people per day for one pillar.
      *
-     * `DATE()` rather than a driver-specific expression: the app runs on MySQL
-     * and the suite on SQLite, and both read it the same way.
+     * Bucketed on the display clock — see {@see GroupsByLocalDay}. Counting
+     * the distinct people has to happen on the same side as the grouping, so
+     * both moved out of the query together.
      *
      * @return array<string, int> Keyed by date.
      */
@@ -72,17 +75,15 @@ class WinMixController extends Controller
     {
         $posts = 'posts';
 
-        return DB::table($table)
-            ->join($posts, "{$posts}.id", '=', "{$table}.post_id")
-            ->whereBetween("{$table}.completed_at", [$from, $to])
-            ->groupBy('day')
-            ->select(
-                DB::raw("DATE({$table}.completed_at) AS day"),
-                DB::raw("COUNT(DISTINCT {$posts}.user_id) AS total"),
-            )
-            ->pluck('total', 'day')
-            ->map(fn ($total): int => (int) $total)
-            ->all();
+        return $this->distinctPerLocalDay(
+            DB::table($table)
+                ->join($posts, "{$posts}.id", '=', "{$table}.post_id")
+                ->whereBetween("{$table}.completed_at", [$from, $to])
+                ->select(
+                    DB::raw("{$table}.completed_at AS at"),
+                    DB::raw("{$posts}.user_id AS who"),
+                )
+        );
     }
 
     /**
@@ -97,9 +98,10 @@ class WinMixController extends Controller
     private function fillCalendar(array $counts, CarbonInterface $from, int $days): array
     {
         $points = [];
+        $dates = $this->localDaysFrom($from, $days);
 
         for ($offset = 0; $offset < $days; $offset++) {
-            $date = $from->copy()->addDays($offset)->toDateString();
+            $date = $dates[$offset];
 
             $point = ['date' => $date];
 

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Concerns\GroupsByLocalDay;
 use App\Concerns\ResolvesStatWindow;
 use App\Concerns\ScopesToOwnedCircles;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  */
 class ActivityOverviewController extends Controller
 {
-    use ResolvesStatWindow, ScopesToOwnedCircles;
+    use GroupsByLocalDay, ResolvesStatWindow, ScopesToOwnedCircles;
 
     /**
      * The detail table behind each win type.
@@ -47,8 +49,8 @@ class ActivityOverviewController extends Controller
 
         return response()->json([
             'days' => $days,
-            'from' => $windowStart->toDateString(),
-            'to' => $windowEnd->toDateString(),
+            'from' => Day::dateOf($windowStart),
+            'to' => Day::dateOf($windowEnd),
             'series' => array_keys(self::WIN_TABLES),
             'points' => $this->fillCalendar($counts, $windowStart, $days),
         ]);
@@ -57,20 +59,17 @@ class ActivityOverviewController extends Controller
     /**
      * One grouped count per day for a single detail table.
      *
-     * `DATE()` rather than a driver-specific expression: the app runs on MySQL
-     * and the suite on SQLite, and both read it the same way.
+     * Bucketed on the display clock — see {@see GroupsByLocalDay}.
      *
      * @return array<string, int> Keyed by date.
      */
     private function dailyCounts(string $table, User $owner, CarbonInterface $from, CarbonInterface $to): array
     {
-        return $this->winsInOwnedCircles($table, $owner)
-            ->whereBetween('completed_at', [$from, $to])
-            ->groupBy('day')
-            ->select(DB::raw('DATE(completed_at) AS day'), DB::raw('COUNT(*) AS total'))
-            ->pluck('total', 'day')
-            ->map(fn ($total): int => (int) $total)
-            ->all();
+        return $this->countPerLocalDay(
+            $this->winsInOwnedCircles($table, $owner)
+                ->whereBetween('completed_at', [$from, $to])
+                ->select(DB::raw('completed_at AS at'))
+        );
     }
 
     /**
@@ -85,9 +84,10 @@ class ActivityOverviewController extends Controller
     private function fillCalendar(array $counts, CarbonInterface $from, int $days): array
     {
         $points = [];
+        $dates = $this->localDaysFrom($from, $days);
 
         for ($offset = 0; $offset < $days; $offset++) {
-            $date = $from->copy()->addDays($offset)->toDateString();
+            $date = $dates[$offset];
 
             $point = ['date' => $date];
 

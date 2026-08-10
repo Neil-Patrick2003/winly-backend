@@ -2,6 +2,7 @@
 
 namespace App\Concerns;
 
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -14,11 +15,14 @@ use Illuminate\Support\Facades\DB;
  */
 trait CountsDailyRows
 {
+    use GroupsByLocalDay;
+
     /**
      * Rows created per day, as chart points.
      *
-     * `DATE()` rather than a driver-specific expression: the app runs on MySQL
-     * and the suite on SQLite, and both read it the same way.
+     * Bucketed on the display clock — see {@see GroupsByLocalDay}. The range
+     * is still cut in the database, on the UTC instants the window resolves
+     * to; only the grouping happens here.
      *
      * @return list<array{date: string, value: int}>
      */
@@ -28,22 +32,15 @@ trait CountsDailyRows
         int $days,
         string $column = 'created_at',
     ): array {
-        $counts = DB::table($table)
-            ->whereBetween($column, [$from, $from->copy()->addDays($days)->startOfDay()])
-            ->groupBy('day')
-            ->select(DB::raw("DATE({$column}) AS day"), DB::raw('COUNT(*) AS total'))
-            ->pluck('total', 'day')
-            ->map(fn ($total): int => (int) $total)
-            ->all();
+        $counts = $this->countPerLocalDay(
+            DB::table($table)
+                ->whereBetween($column, [$from, Day::utc(Day::startOf($from)->addDays($days))])
+                ->select(DB::raw("{$column} AS at"))
+        );
 
-        $points = [];
-
-        for ($offset = 0; $offset < $days; $offset++) {
-            $date = $from->copy()->addDays($offset)->toDateString();
-
-            $points[] = ['date' => $date, 'value' => $counts[$date] ?? 0];
-        }
-
-        return $points;
+        return array_map(
+            fn (string $date): array => ['date' => $date, 'value' => $counts[$date] ?? 0],
+            $this->localDaysFrom($from, $days),
+        );
     }
 }

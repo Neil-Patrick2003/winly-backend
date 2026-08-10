@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -428,7 +429,7 @@ class PostController extends Controller
      */
     protected function applyWin(Post $post, array $win): array
     {
-        $shared = ['completed_at' => $win['completed_at'] ?? (string) now()];
+        $shared = ['completed_at' => $this->completedAt($win)];
         $type = (string) $win['type'];
 
         /*
@@ -596,7 +597,12 @@ class PostController extends Controller
     {
         return collect($wins)
             ->reject(function (array $win) use ($user): bool {
-                $day = Carbon::parse($win['completed_at'] ?? now());
+                // The day it lands on is read on the display clock, and the
+                // bounds are converted back to UTC for the column. Asked in
+                // UTC, "the same day" runs from eight in the morning to eight
+                // the next, so an evening win and the following morning's look
+                // like one day and the second is not counted at all.
+                $day = Day::startOf($this->completedAt($win));
 
                 return $this->winModel((string) $win['type'])
                     ->newQuery()
@@ -605,12 +611,32 @@ class PostController extends Controller
                     // who wrote it.
                     ->whereIn('post_id', $user->posts()->select('posts.id'))
                     ->whereBetween('completed_at', [
-                        $day->copy()->startOfDay(),
-                        $day->copy()->endOfDay(),
+                        Day::utc($day),
+                        Day::utc($day->copy()->endOfDay()),
                     ])
                     ->exists();
             })
             ->count();
+    }
+
+    /**
+     * When a win was completed, on the clock the column keeps.
+     *
+     * A caller may say when, and may say it with an offset. Eloquent writes
+     * whatever wall clock the value carries and reads it back as UTC, so
+     * anything arriving on another clock is stored shifted by its own offset —
+     * `18:00+08:00` lands in the column as six in the evening UTC rather than
+     * ten in the morning. Converted here, once, so the column is UTC whatever
+     * came in and every day boundary drawn off it lands where it should.
+     *
+     * A bare `2026-07-28 18:00:00` with no offset is still read as UTC, which
+     * is what it has always meant to this endpoint.
+     *
+     * @param  array<string, mixed>  $win
+     */
+    protected function completedAt(array $win): Carbon
+    {
+        return Day::utc(Carbon::parse($win['completed_at'] ?? now()));
     }
 
     /**
@@ -643,7 +669,7 @@ class PostController extends Controller
             // Derived, never taken from the caller: it simply records whether
             // this win ended up with files.
             'media_attached' => $media !== [],
-            'completed_at' => $win['completed_at'] ?? (string) now(),
+            'completed_at' => $this->completedAt($win),
         ];
 
         $detail = match ($win['type']) {

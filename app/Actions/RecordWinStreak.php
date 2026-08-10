@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\User;
+use App\Support\Day;
 use Illuminate\Support\Carbon;
 
 class RecordWinStreak
@@ -18,8 +19,15 @@ class RecordWinStreak
      */
     public function execute(User $user, ?Carbon $on = null): void
     {
-        $today = ($on ?? Carbon::now())->startOfDay();
-        $lastWin = $user->last_win_on?->startOfDay();
+        // The day this landed on, read on the display clock. In UTC a win
+        // logged before eight in the morning is filed under yesterday, which
+        // both credits the wrong day and lets the next one look like a repeat
+        // of it rather than the day that carries the streak forward.
+        $today = Day::startOf($on);
+        // Rebuilt on the same clock as `$today`. Read straight off the model
+        // it carries the application timezone, and a UTC midnight is never
+        // equal to a local one — every day would look like a fresh start.
+        $lastWin = $user->last_win_on === null ? null : Day::startOfDate($user->last_win_on);
 
         if ($lastWin?->equalTo($today)) {
             return;
