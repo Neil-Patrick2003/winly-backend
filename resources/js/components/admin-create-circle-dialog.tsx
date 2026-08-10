@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Check, Search } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { CircleVisibilityField } from '@/components/circle-visibility-field';
 import InputError from '@/components/input-error';
 import { PersonRow } from '@/components/person-row';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ export function AdminCreateCircleDialog({
             description: '',
             tag: '',
             owner_id: '',
+            is_private: false,
         });
 
     /*
@@ -158,6 +160,13 @@ export function AdminCreateCircleDialog({
                             />
                             <InputError message={errors.tag} />
                         </div>
+
+                        <CircleVisibilityField
+                            isPrivate={data.is_private}
+                            onChange={(next) => setData('is_private', next)}
+                            disabled={processing}
+                        />
+                        <InputError message={errors.is_private} />
 
                         <div className="grid gap-2">
                             <Label htmlFor="admin-circle-owner">Owner</Label>

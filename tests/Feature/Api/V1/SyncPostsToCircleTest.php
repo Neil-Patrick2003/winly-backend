@@ -53,6 +53,24 @@ test('the circle says how many earlier wins could be brought in', function () {
         ->assertJsonPath('data.syncable_posts_count', 3);
 });
 
+test('joining says how many earlier wins could come too', function () {
+    ownPost(Post::VISIBILITY_PUBLIC);
+    ownPost(Post::VISIBILITY_CUSTOM);
+
+    // Answered by joining itself, so the screen can ask about them on the way
+    // in rather than spending a second request finding out whether to.
+    $this->postJson(route('api.v1.circles.join', $this->circle))
+        ->assertOk()
+        ->assertJsonPath('data.is_member', true)
+        ->assertJsonPath('data.syncable_posts_count', 2);
+});
+
+test('joining with nothing written offers nothing', function () {
+    $this->postJson(route('api.v1.circles.join', $this->circle))
+        ->assertOk()
+        ->assertJsonPath('data.syncable_posts_count', 0);
+});
+
 test('a win already on the wall is not offered again', function () {
     joinCircle();
     $there = ownPost(Post::VISIBILITY_CUSTOM);

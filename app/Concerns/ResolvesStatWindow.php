@@ -2,6 +2,7 @@
 
 namespace App\Concerns;
 
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,14 @@ use Illuminate\Http\Request;
  * Every tile compares its window against the stretch of equal length directly
  * before it — otherwise the change percentage weighs a long period against a
  * short one and always reads as growth.
+ *
+ * The bounds are local day boundaries handed back as the UTC instants they
+ * fall on. Both halves matter: cut in UTC, a day here would run from eight in
+ * the morning to eight the next and disagree with the streak and the week the
+ * app already shows — and returned as local-clock values, every `whereBetween`
+ * built on them would be compared against a UTC column and land off by the
+ * offset. Use {@see Day::dateOf()} to name one of these days, never
+ * `toDateString()`, which would read the UTC date the instant sits on.
  */
 trait ResolvesStatWindow
 {
@@ -34,10 +43,10 @@ trait ResolvesStatWindow
     protected function windowStart(Request $request): CarbonInterface
     {
         if (! $request->filled('from')) {
-            return today()->subDays($this->windowDays($request) - 1);
+            return Day::utc(Day::startOf()->subDays($this->windowDays($request) - 1));
         }
 
-        return $request->date('from')->startOfDay();
+        return Day::utc(Day::startOfDate($request->date('from')));
     }
 
     /**
@@ -46,9 +55,11 @@ trait ResolvesStatWindow
      */
     protected function windowEnd(Request $request): CarbonInterface
     {
-        return $request->filled('to')
-            ? $request->date('to')->endOfDay()
-            : today()->endOfDay();
+        return Day::utc(
+            $request->filled('to')
+                ? Day::startOfDate($request->date('to'))->endOfDay()
+                : Day::startOf()->endOfDay()
+        );
     }
 
     /**
@@ -63,8 +74,10 @@ trait ResolvesStatWindow
             ));
         }
 
-        $days = (int) $request->date('from')->startOfDay()
-            ->diffInDays($this->windowEnd($request)->startOfDay()) + 1;
+        // Counted on local calendar days, not on the instants — an offset
+        // that is not a whole number of days would otherwise lose one.
+        $days = (int) Day::startOfDate($request->date('from'))
+            ->diffInDays(Day::startOf($this->windowEnd($request))) + 1;
 
         return max(1, min($days, self::MAX_WINDOW_DAYS));
     }
@@ -74,7 +87,11 @@ trait ResolvesStatWindow
      */
     protected function previousWindowStart(Request $request): CarbonInterface
     {
-        return $this->windowStart($request)->subDays($this->windowDays($request));
+        // Stepped back on the local clock and converted after, so a window
+        // spanning a daylight-saving change is still the same run of days.
+        return Day::utc(
+            Day::startOf($this->windowStart($request))->subDays($this->windowDays($request))
+        );
     }
 
     /**

@@ -46,6 +46,17 @@ class UpdateCircleRequest extends FormRequest
             'tag' => ['nullable', 'string', 'max:40'],
             'icon_initial' => ['required', 'string', 'max:2'],
             'color_hex' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
+
+            /*
+             * Who may find it, as the app's own endpoint spells it.
+             *
+             * `sometimes` rather than `nullable`: the controller saves whatever
+             * `validated()` returns, so a rule that is missing here does not
+             * merely go unchecked — the key is stripped and the setting cannot
+             * be changed from this form at all, which is exactly what it did
+             * before this line existed.
+             */
+            'is_private' => ['sometimes', 'boolean'],
         ];
     }
 

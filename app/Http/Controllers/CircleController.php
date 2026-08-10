@@ -131,6 +131,10 @@ class CircleController extends Controller
             'name' => $request->validated('name'),
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
+            // Absent is public, as it is on the app's endpoint. `boolean()`
+            // reads the "0"/"1" a checkbox posts the same way it reads a
+            // JSON `true`, which is what lets one rule serve both.
+            'is_private' => $request->boolean('is_private'),
         ]);
 
         Inertia::flash('toast', [

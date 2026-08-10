@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin\Stats;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Day;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,7 +31,10 @@ class LiveStreaksStatController extends Controller
      */
     public function __invoke(Request $request): JsonResponse
     {
-        $yesterday = today()->subDay();
+        // Local, not UTC: `last_win_on` records the day on the display clock,
+        // so asking with a UTC `today()` counts a different set for eight
+        // hours either side of midnight than the app itself would.
+        $yesterday = Day::startOf()->subDay();
 
         $live = User::query()
             ->whereNotNull('last_win_on')

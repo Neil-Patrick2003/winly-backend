@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Concerns\GroupsByLocalDay;
 use App\Concerns\ResolvesStatWindow;
 use App\Concerns\ScopesToOwnedCircles;
 use App\Http\Controllers\Controller;
@@ -22,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  */
 class MemberOverviewController extends Controller
 {
-    use ResolvesStatWindow, ScopesToOwnedCircles;
+    use GroupsByLocalDay, ResolvesStatWindow, ScopesToOwnedCircles;
 
     /**
      * Handle the incoming request.
@@ -33,13 +34,13 @@ class MemberOverviewController extends Controller
         $days = $this->windowDays($request);
         $windowStart = $this->windowStart($request);
 
-        $joins = $this->membershipsInOwnedCircles($owner)
-            ->whereBetween('joined_at', [$windowStart, $this->windowEnd($request)])
-            ->groupBy('day')
-            ->select(DB::raw('DATE(joined_at) AS day'), DB::raw('COUNT(*) AS total'))
-            ->pluck('total', 'day')
-            ->map(fn ($total): int => (int) $total)
-            ->all();
+        // Bucketed on the display clock — see `GroupsByLocalDay`. The range is
+        // still cut in the database; only the grouping moved out of it.
+        $joins = $this->countPerLocalDay(
+            $this->membershipsInOwnedCircles($owner)
+                ->whereBetween('joined_at', [$windowStart, $this->windowEnd($request)])
+                ->select(DB::raw('joined_at AS at'))
+        );
 
         return response()->json([
             'days' => $days,
@@ -86,14 +87,9 @@ class MemberOverviewController extends Controller
      */
     private function fillCalendar(array $joins, CarbonInterface $from, int $days): array
     {
-        $points = [];
-
-        for ($offset = 0; $offset < $days; $offset++) {
-            $date = $from->copy()->addDays($offset)->toDateString();
-
-            $points[] = ['date' => $date, 'joined' => $joins[$date] ?? 0];
-        }
-
-        return $points;
+        return array_map(
+            fn (string $date): array => ['date' => $date, 'joined' => $joins[$date] ?? 0],
+            $this->localDaysFrom($from, $days),
+        );
     }
 }

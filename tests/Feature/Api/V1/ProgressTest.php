@@ -21,7 +21,7 @@ test('guests cannot read the week', function () {
 
 test('the week runs Monday to Sunday around today', function () {
     // A Wednesday.
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     $response = $this->getJson(route('api.v1.progress.week'))->assertOk();
 
@@ -34,19 +34,19 @@ test('the week runs Monday to Sunday around today', function () {
 });
 
 test('each day says which kinds of win were logged on it', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     $monday = Post::factory()->for($this->user)->create();
     WinMeditation::factory()->for($monday, 'post')->create([
-        'completed_at' => Carbon::parse('2026-07-27 07:00:00'),
+        'completed_at' => storedAtLocal('2026-07-27 07:00:00'),
     ]);
     WinMovement::factory()->for($monday, 'post')->create([
-        'completed_at' => Carbon::parse('2026-07-27 18:00:00'),
+        'completed_at' => storedAtLocal('2026-07-27 18:00:00'),
     ]);
 
     $wednesday = Post::factory()->for($this->user)->create();
     WinLearning::factory()->for($wednesday, 'post')->create([
-        'completed_at' => Carbon::parse('2026-07-29 09:00:00'),
+        'completed_at' => storedAtLocal('2026-07-29 09:00:00'),
     ]);
 
     $days = collect($this->getJson(route('api.v1.progress.week'))->assertOk()->json('data.days'))
@@ -73,12 +73,12 @@ test('each day says which kinds of win were logged on it', function () {
 });
 
 test('two wins of the same kind on one day is still one day', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     foreach ([8, 20] as $hour) {
         $post = Post::factory()->for($this->user)->create();
         WinMeditation::factory()->for($post, 'post')->create([
-            'completed_at' => Carbon::parse("2026-07-29 {$hour}:00:00"),
+            'completed_at' => storedAtLocal("2026-07-29 {$hour}:00:00"),
         ]);
     }
 
@@ -89,12 +89,12 @@ test('two wins of the same kind on one day is still one day', function () {
 });
 
 test('a win is placed by when it was done, not when it was posted', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     // Written on Wednesday about Monday's walk.
     $post = Post::factory()->for($this->user)->create(['created_at' => Carbon::parse('2026-07-29 09:00:00')]);
     WinMovement::factory()->for($post, 'post')->create([
-        'completed_at' => Carbon::parse('2026-07-27 17:00:00'),
+        'completed_at' => storedAtLocal('2026-07-27 17:00:00'),
     ]);
 
     $days = collect($this->getJson(route('api.v1.progress.week'))->assertOk()->json('data.days'))
@@ -105,17 +105,17 @@ test('a win is placed by when it was done, not when it was posted', function () 
 });
 
 test('other peoples wins and other weeks stay out of it', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     $mine = Post::factory()->for($this->user)->create();
     WinMeditation::factory()->for($mine, 'post')->create([
         // Last week.
-        'completed_at' => Carbon::parse('2026-07-22 07:00:00'),
+        'completed_at' => storedAtLocal('2026-07-22 07:00:00'),
     ]);
 
     $theirs = Post::factory()->for(User::factory())->create();
     WinLearning::factory()->for($theirs, 'post')->create([
-        'completed_at' => Carbon::parse('2026-07-29 07:00:00'),
+        'completed_at' => storedAtLocal('2026-07-29 07:00:00'),
     ]);
 
     $days = collect($this->getJson(route('api.v1.progress.week'))->assertOk()->json('data.days'));
@@ -125,7 +125,7 @@ test('other peoples wins and other weeks stay out of it', function () {
 });
 
 test('the week carries the streak the header shows', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     // Forced rather than filled: the streak columns are guarded so that only
     // `RecordWinStreak` moves them, which is exactly what a mass assignment
@@ -143,7 +143,7 @@ test('the week carries the streak the header shows', function () {
 });
 
 test('a streak that has already lapsed is reported as broken', function () {
-    Carbon::setTestNow(Carbon::parse('2026-07-29 10:00:00'));
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
 
     $this->user->forceFill([
         'streak_days' => 5,

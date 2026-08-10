@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 
 /**
  * An owner with one circle, plus a stranger's circle that nothing on the
@@ -158,10 +159,10 @@ test('the overview fills every day and stays inside the owner circles', function
 
     $points = collect($response->json('points'))->keyBy('date');
 
-    expect($points[now()->subDay()->toDateString()])
+    expect($points[Day::dateOf(now()->subDay())])
         ->toMatchArray(['meditation' => 1, 'learning' => 1, 'movement' => 0]);
 
-    expect($points[now()->toDateString()])
+    expect($points[Day::dateOf(now())])
         ->toMatchArray(['meditation' => 0, 'learning' => 0, 'movement' => 1]);
 });
 
@@ -276,8 +277,8 @@ test('the member overview charts joins and counts every standing', function () {
 
     $points = collect($response->json('points'))->keyBy('date');
 
-    expect($points[now()->subDay()->toDateString()]['joined'])->toBe(1);
-    expect($points[now()->toDateString()]['joined'])->toBe(0);
+    expect($points[Day::dateOf(now()->subDay())]['joined'])->toBe(1);
+    expect($points[Day::dateOf(now())]['joined'])->toBe(0);
 });
 
 test('an owner with no circles gets zeros rather than the whole app', function () {

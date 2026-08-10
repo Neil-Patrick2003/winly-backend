@@ -5,6 +5,7 @@ use App\Models\Post;
 use App\Models\User;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 
 beforeEach(function () {
     $this->admin = User::factory()->create(['is_admin' => true]);
@@ -141,7 +142,7 @@ test('the win mix counts a person once per pillar per day', function () {
         ->assertOk();
 
     $today = collect($response->json('points'))
-        ->firstWhere('date', today()->toDateString());
+        ->firstWhere('date', Day::dateOf(now()));
 
     expect($today['meditation'])->toBe(1);
     expect($today['movement'])->toBe(1);
@@ -161,14 +162,16 @@ test('the win mix and growth series fill in the quiet days', function () {
 });
 
 test('signups and posts are separate endpoints, not one payload', function () {
-    $author = User::factory()->create(['created_at' => today()]);
+    $author = User::factory()->create(['created_at' => now()]);
 
     Post::factory()->count(3)->create([
         'user_id' => $author->id,
-        'created_at' => today(),
+        'created_at' => now(),
     ]);
 
-    $today = today()->toDateString();
+    // The local date the seeded rows fall on. `today()` is the UTC one, which
+    // is a different day for the eight hours either side of local midnight.
+    $today = Day::dateOf(now());
 
     /*
      * Kept apart rather than summed onto one axis or one response: they are
@@ -263,4 +266,28 @@ test('engagement is the share of posts that drew something', function () {
         ->getJson(route('admin.stats.engagement', ['days' => 7]))
         ->assertOk()
         ->assertJson(['value' => 25.0, 'engaged' => 1, 'total' => 4]);
+});
+
+test('a win just after local midnight lands on the new day, not the UTC one', function () {
+    // The bucket boundary. In UTC+8 this instant is still the previous UTC
+    // date, so a chart grouped on `DATE(completed_at)` drew it a day early.
+    $this->travelTo(atLocal('2026-07-29 00:30:00'));
+
+    $circle = Circle::factory()->create();
+    $author = User::factory()->create();
+
+    WinMovement::factory()->create([
+        'post_id' => postInCircle($circle, $author)->id,
+        'completed_at' => now(),
+    ]);
+
+    $points = collect(
+        $this->actingAs($this->admin)
+            ->getJson(route('admin.stats.win-mix', ['days' => 7]))
+            ->assertOk()
+            ->json('points')
+    )->keyBy('date');
+
+    expect($points['2026-07-29']['movement'])->toBe(1);
+    expect($points['2026-07-28']['movement'])->toBe(0);
 });

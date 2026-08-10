@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Api\V1\Auth\NewPasswordController;
+use App\Http\Controllers\Api\V1\Auth\PasswordResetCodeController;
 use App\Http\Controllers\Api\V1\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\V1\CircleController;
 use App\Http\Controllers\Api\V1\CircleInvitationController;
@@ -28,6 +30,24 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
 
     Route::post('login', [AuthenticatedSessionController::class, 'store'])
         ->name('login');
+
+    /*
+     * Forgotten passwords, by emailed code rather than by link — the app never
+     * hands the person off to a browser.
+     *
+     * Both limits are per IP and sit on top of the per-address ones the actions
+     * and the request keep: `SendPasswordResetCode` will not send twice inside
+     * a minute to the same address, and `ResetPasswordRequest` locks an address
+     * after five wrong codes. These two only stop one caller working through
+     * many addresses.
+     */
+    Route::post('forgot-password', [PasswordResetCodeController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('password.email');
+
+    Route::post('reset-password', [NewPasswordController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('password.update');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
@@ -239,6 +259,12 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::delete('users/{user}/follow', [FollowController::class, 'destroy'])
             ->middleware('throttle:60,1')
             ->name('users.unfollow');
+
+        // Who liked it, for anyone who may read the post. Plural, so it does
+        // not collide with the singular `posts/{post}/like` the caller acts on
+        // their own like through.
+        Route::get('posts/{post}/likes', [PostLikeController::class, 'index'])
+            ->name('posts.likes');
 
         Route::put('posts/{post}/like', [PostLikeController::class, 'store'])
             ->middleware('throttle:120,1')

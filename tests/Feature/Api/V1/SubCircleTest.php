@@ -223,3 +223,28 @@ test('the circles inside one are listed to anybody who may see it', function () 
         ->assertJsonPath('data.0.id', $inner->id)
         ->assertJsonPath('data.0.is_sub_circle', true);
 });
+
+test('a private circle inside one is not listed to an outsider', function () {
+    $inner = subCircle($this->owner, [$this->owner]);
+    $inner->update(['is_private' => true]);
+
+    Sanctum::actingAs($this->outsider);
+
+    // Private means not listed, the same as in Discover and search: the name
+    // alone would say the circle exists and roughly what it is for.
+    $this->getJson(route('api.v1.circles.sub.index', $this->parent))
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
+test('a private circle inside one is still listed to its own members', function () {
+    $inner = subCircle($this->owner, [$this->owner, $this->member]);
+    $inner->update(['is_private' => true]);
+
+    Sanctum::actingAs($this->member);
+
+    // Hidden from strangers, not from the people already inside it.
+    $this->getJson(route('api.v1.circles.sub.index', $this->parent))
+        ->assertOk()
+        ->assertJsonPath('data.0.id', $inner->id);
+});

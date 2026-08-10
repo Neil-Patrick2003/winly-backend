@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -44,7 +45,12 @@ class RecalculateWinStats
                 // Grouped in PHP rather than by a raw `DATE()`, which reads
                 // differently across database engines. Same reasoning as the
                 // weekly progress endpoint, and the same answer as a result.
-                ->map(fn (CarbonInterface $at): string => $at->toDateString())
+                //
+                // On the display clock, so a win logged after local midnight
+                // is the day it felt like rather than the UTC day it is still
+                // inside — otherwise a recount disagrees with what the streak
+                // and the week already said.
+                ->map(fn (CarbonInterface $at): string => Day::dateOf($at))
                 /*
                  * A pillar counts once a day. Sitting twice on a Tuesday is
                  * still the one Tuesday you meditated — the same Tuesday the

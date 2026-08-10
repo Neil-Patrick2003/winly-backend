@@ -6,6 +6,7 @@ use App\Events\NotificationCreated;
 use App\Models\Notification;
 use App\Models\Post;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Writes the in-app notifications somebody's own activity earns them.
@@ -106,7 +107,21 @@ class RecordNotification
     {
         // Straight down the socket to whoever is holding one open, so the bell
         // moves as it happens rather than on the next poll.
-        NotificationCreated::dispatch($notification);
+        //
+        // Guarded for the same reason the push below is: `ShouldBroadcastNow`
+        // publishes inline, so an unreachable Reverb throws inside the request
+        // that caused it. The like or follow has already committed by then, and
+        // letting the throw out turns a write that succeeded into a 500 the
+        // caller reads as failure — then a retry answers 200, because the
+        // second attempt is not new and never reaches here at all.
+        try {
+            NotificationCreated::dispatch($notification);
+        } catch (\Throwable $caught) {
+            Log::warning('Broadcast failed', [
+                'notification' => $notification->getKey(),
+                'error' => $caught->getMessage(),
+            ]);
+        }
 
         $this->push->execute($notification);
 

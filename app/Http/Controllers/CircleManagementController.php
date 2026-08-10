@@ -51,6 +51,7 @@ class CircleManagementController extends Controller
                 'color_hex' => $circle->color_hex,
                 'tag' => $circle->tag,
                 'members_count' => $circle->members_count,
+                'is_private' => $circle->is_private,
                 'can_manage' => true,
                 /*
                  * Handing the circle to somebody else is staff's alone, not the
@@ -150,6 +151,10 @@ class CircleManagementController extends Controller
             'description' => $request->validated('description'),
             'tag' => $request->validated('tag'),
             'parent_id' => $circle->getKey(),
+            // Its own answer rather than the parent's: a private circle inside
+            // a public one is the whole point of the smaller room, and a public
+            // one inside a private parent is still reached only through it.
+            'is_private' => $request->boolean('is_private'),
         ]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Circle created inside this one.')]);

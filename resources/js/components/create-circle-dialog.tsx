@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import {  useState } from 'react';
 import type {ReactNode} from 'react';
 import CircleController from '@/actions/App/Http/Controllers/CircleController';
+import { CircleVisibilityField } from '@/components/circle-visibility-field';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +30,7 @@ export function CreateCircleDialog({ trigger }: { trigger: ReactNode }) {
         name: '',
         description: '',
         tag: '',
+        is_private: false,
     });
 
     const submit = (event: React.FormEvent) => {
@@ -108,6 +110,13 @@ export function CreateCircleDialog({ trigger }: { trigger: ReactNode }) {
                             />
                             <InputError message={errors.tag} />
                         </div>
+
+                        <CircleVisibilityField
+                            isPrivate={data.is_private}
+                            onChange={(next) => setData('is_private', next)}
+                            disabled={processing}
+                        />
+                        <InputError message={errors.is_private} />
                     </div>
 
                     <DialogFooter>

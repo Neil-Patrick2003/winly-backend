@@ -69,6 +69,29 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Display Timezone
+    |--------------------------------------------------------------------------
+    |
+    | The clock the product is read on. Timestamps are stored in UTC — the
+    | setting above — and this is only ever used to decide where a *day*
+    | starts: which cell of the week a win lands in, whether a streak is still
+    | standing, what "today" means on a chart.
+    |
+    | Those are not UTC questions. Somebody logging a win at one in the morning
+    | did it today, not yesterday, and a streak that expires at eight in the
+    | morning expires at the wrong time. Storage stays UTC so nothing already
+    | written has to move; only the boundaries are drawn here.
+    |
+    | Deliberately separate from `timezone`. Changing that one would reinterpret
+    | every datetime already in the database as local wall-clock and shift the
+    | whole history sideways.
+    |
+    */
+
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Manila'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

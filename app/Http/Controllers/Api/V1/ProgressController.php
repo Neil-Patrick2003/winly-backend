@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,13 +36,17 @@ class ProgressController extends Controller
         $user = $request->user();
 
         /*
-         * Monday to Sunday of the week containing today, in the application's
-         * timezone — the same clock `currentStreak` is judged on, so the badge
-         * and the row underneath it never disagree about where a day ends.
+         * Monday to Sunday of the week containing today, on the display clock
+         * — the same one `currentStreak` is judged on, so the badge and the
+         * row underneath it never disagree about where a day ends.
+         *
+         * Not UTC. At UTC+8 the UTC date turns over at eight in the morning,
+         * so every morning before then this marked yesterday as today and the
+         * whole strip read eight hours stale.
          */
-        $start = Carbon::now()->startOfWeek();
-        $end = Carbon::now()->endOfWeek();
-        $today = Carbon::now()->startOfDay();
+        $start = Day::now()->startOfWeek();
+        $end = Day::now()->endOfWeek();
+        $today = Day::startOf();
 
         $meditation = $this->daysLogged(WinMeditation::query()->getModel(), $user, $start, $end);
         $learning = $this->daysLogged(WinLearning::query()->getModel(), $user, $start, $end);
@@ -111,12 +116,20 @@ class ProgressController extends Controller
             // A subquery rather than `whereHas`, since the only thing being
             // asked of the post is who wrote it.
             ->whereIn('post_id', $user->posts()->select('posts.id'))
-            ->whereBetween('completed_at', [$start, $end])
+            // The bounds are local midnights and the column is UTC, so they
+            // are converted before they go anywhere near the query — a local
+            // bound compared against a UTC column is wrong by the offset, and
+            // drops the first hours of Monday into the week before.
+            ->whereBetween('completed_at', [Day::utc($start), Day::utc($end)])
             ->pluck('completed_at')
             // `CarbonInterface` rather than a concrete class: the application
             // dates are immutable, so a cast attribute arrives as
             // `CarbonImmutable` and not the `Carbon` the helpers here return.
-            ->map(fn (CarbonInterface $at): string => $at->toDateString())
+            //
+            // Read back on the display clock too: taking the date off the
+            // stored UTC value answers the UTC question, which is how a win
+            // logged at one in the morning ended up in the previous cell.
+            ->map(fn (CarbonInterface $at): string => Day::dateOf($at))
             ->unique()
             ->values();
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\Stats;
 use App\Concerns\CountsDailyRows;
 use App\Concerns\ResolvesStatWindow;
 use App\Http\Controllers\Controller;
+use App\Support\Day;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,7 +29,9 @@ class PostsSeriesController extends Controller
 
         return response()->json([
             'days' => $days,
-            'from' => $from->toDateString(),
+            // `$from` is the UTC instant local midnight falls on, so the
+            // date has to be read back on the display clock.
+            'from' => Day::dateOf($from),
             'points' => $this->dailySeries('posts', $from, $days),
         ]);
     }

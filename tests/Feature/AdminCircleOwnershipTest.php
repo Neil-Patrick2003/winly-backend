@@ -156,6 +156,20 @@ test('staff can start a circle owned by somebody else', function () {
     expect($circle->members_count)->toBe(1);
 });
 
+test('staff can start a private circle on somebody else behalf', function () {
+    // Chosen for the owner at the point of making it, so the circle arrives set
+    // up the way they asked rather than needing a first edit to put right.
+    $this->actingAs($this->admin)
+        ->post(route('admin.circles.store'), [
+            'name' => 'Quiet Runners',
+            'owner_id' => $this->member->id,
+            'is_private' => '1',
+        ])
+        ->assertRedirect();
+
+    expect(Circle::where('name', 'Quiet Runners')->sole()->is_private)->toBeTrue();
+});
+
 test('a circle cannot be started without saying who owns it', function () {
     $this->actingAs($this->admin)
         ->post(route('admin.circles.store'), ['name' => 'Nobody Home'])
