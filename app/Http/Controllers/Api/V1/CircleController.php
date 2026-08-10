@@ -251,7 +251,7 @@ class CircleController extends Controller
             }
         });
 
-        return $this->membershipState($circle->refresh(), member: true);
+        return $this->membershipState($circle->refresh(), member: true, viewer: $user);
     }
 
     /**
@@ -277,7 +277,7 @@ class CircleController extends Controller
             }
         });
 
-        return $this->membershipState($circle->refresh(), member: false);
+        return $this->membershipState($circle->refresh(), member: false, viewer: $user);
     }
 
     /**
@@ -552,14 +552,25 @@ class CircleController extends Controller
 
     /**
      * The answer both join and leave give: what the circle looks like after.
+     *
+     * The syncable count rides along so the screen that has just joined can ask
+     * about the earlier wins there and then. Without it the offer would cost a
+     * second request to find out whether it is worth making at all — and asked
+     * late enough to arrive after the person has moved on, which is the same as
+     * not asking.
+     *
+     * Joining does not change the figure. It is sent on leaving too because the
+     * one shape serves both, and a caller that reads it either way is one that
+     * cannot be wrong about which case it is in.
      */
-    protected function membershipState(Circle $circle, bool $member): JsonResponse
+    protected function membershipState(Circle $circle, bool $member, User $viewer): JsonResponse
     {
         return response()->json([
             'data' => [
                 'id' => $circle->getKey(),
                 'is_member' => $member,
                 'members_count' => $circle->members_count,
+                'syncable_posts_count' => $this->syncablePostCount($viewer, $circle),
             ],
         ]);
     }
