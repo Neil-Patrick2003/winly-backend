@@ -45,6 +45,14 @@ class IndexTrackerRequest extends FormRequest
              */
             'circles' => ['nullable', 'array'],
             'circles.*' => ['uuid'],
+
+            /*
+             * Narrows the rows to the people whose name or username contains
+             * it. A filter on who is listed rather than on what is counted:
+             * the range and the circles decide the numbers, and searching
+             * leaves both alone.
+             */
+            'search' => ['nullable', 'string', 'max:60'],
         ];
     }
 
@@ -70,6 +78,19 @@ class IndexTrackerRequest extends FormRequest
         $ids = $this->validated('circles') ?? [];
 
         return array_values(array_unique(array_map(strval(...), $ids)));
+    }
+
+    /**
+     * What was typed into the search box, if anything.
+     *
+     * Blank reads as absent: a box somebody cleared should list everybody
+     * again, not look for a member named nothing at all.
+     */
+    public function search(): ?string
+    {
+        $search = trim($this->string('search')->value());
+
+        return $search === '' ? null : $search;
     }
 
     /**

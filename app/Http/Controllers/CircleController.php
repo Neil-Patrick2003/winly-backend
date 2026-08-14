@@ -398,10 +398,25 @@ class CircleController extends Controller
          * columns it had not grouped by — `only_full_group_by` refuses that,
          * and the subquery a paginator wraps the count in refuses it first.
          */
+        $search = $request->search();
+
         $members = User::query()
             ->whereIn('id', CircleMembership::query()
                 ->whereIn('circle_id', $counting)
                 ->select('user_id'))
+            /*
+             * Name or username, because either is what somebody looking for a
+             * particular member has to hand. Wildcards in the term are escaped
+             * rather than honoured — a `%` typed into the box is a character
+             * somebody is looking for, not a licence to match everybody.
+             */
+            ->when(filled($search), function (Builder $query) use ($search): void {
+                $term = '%'.str_replace(['%', '_'], ['\%', '\_'], (string) $search).'%';
+
+                $query->where(fn (Builder $inner) => $inner
+                    ->where('full_name', 'like', $term)
+                    ->orWhere('username', 'like', $term));
+            })
             ->orderBy('full_name')
             // The id breaks ties, so a page boundary does not shuffle two
             // people who share a name.
@@ -430,6 +445,7 @@ class CircleController extends Controller
                 ])
                 ->all(),
             'selectedCircles' => $counting,
+            'search' => $search,
             'circle' => $this->circleProps($request, $circle),
             'winTypes' => Post::WIN_TYPES,
             'from' => $request->from()->toDateString(),
