@@ -1,7 +1,8 @@
 import { Head, router } from '@inertiajs/react';
-import { ChevronDown, Flame, Users } from 'lucide-react';
+import { ChevronDown, Flame, SearchX, Users } from 'lucide-react';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { EmptyState } from '@/components/empty-state';
+import SearchField from '@/components/filters/search-field';
 import { Pagination } from '@/components/pagination';
 import { Button } from '@/components/ui/button';
 import {
@@ -65,6 +66,7 @@ export default function Tracker({
     from,
     to,
     days,
+    search,
     errors,
 }: {
     circle: CircleHeader;
@@ -77,21 +79,26 @@ export default function Tracker({
     from: string;
     to: string;
     days: number;
+    /** What the list is narrowed to by name, if anything. */
+    search: string | null;
     errors: Record<string, string>;
 }) {
     /*
-     * The date range and the circle choice travel together.
+     * The date range, the circle choice and the search travel together.
      *
-     * Both live in the query string, so changing one has to resend the other or
-     * it is dropped on the way — narrowing to a circle would silently reset the
-     * dates back to the default month.
+     * All three live in the query string, so changing one has to resend the
+     * others or they are dropped on the way — narrowing to a circle would
+     * silently reset the dates back to the default month, and typing a name
+     * would undo both.
      */
     const reload = (next: {
         from?: string;
         to?: string;
         circles?: string[];
+        search?: string | null;
     }) => {
         const circles = next.circles ?? selectedCircles;
+        const term = next.search === undefined ? search : next.search;
 
         router.get(
             tracker(circle.id).url,
@@ -101,6 +108,7 @@ export default function Tracker({
                 // All of them selected is the same as no filter, and a shorter
                 // URL says so.
                 ...(circles.length === circleOptions.length ? {} : { circles }),
+                ...(term ? { search: term } : {}),
             },
             { preserveState: true, preserveScroll: true, replace: true },
         );
@@ -157,6 +165,24 @@ export default function Tracker({
                             `items-end` lines their inputs up rather than their
                             labels, which are different lengths. */}
                         <div className="flex flex-wrap items-end gap-3">
+                            {/* Narrows the rows, not the range: a searched list
+                                still counts the same days in the same circles,
+                                so a name typed here can be cleared without
+                                losing the window somebody set up first. */}
+                            <div className="grid w-56 gap-1.5">
+                                <Label className="text-caption">
+                                    Find a member
+                                </Label>
+                                <SearchField
+                                    value={search}
+                                    onSearch={(term) =>
+                                        reload({ search: term })
+                                    }
+                                    placeholder="Name or username…"
+                                    label="Search members"
+                                />
+                            </div>
+
                             {/* Only where there is a choice to make: a circle with
                                 none inside it would be a picker of one. */}
                             {circleOptions.length > 1 ? (
@@ -272,11 +298,30 @@ export default function Tracker({
                     )}
 
                     {members.data.length === 0 ? (
-                        <EmptyState
-                            icon={Users}
-                            title="Nobody in this circle yet"
-                            description="Once people join, what they share here will be counted."
-                        />
+                        /* A search that matched nobody is not an empty circle,
+                           and saying so would have somebody wondering where
+                           everyone went. */
+                        search ? (
+                            <EmptyState
+                                icon={SearchX}
+                                title={`Nobody here matches “${search}”`}
+                                description="Try part of a name or a username, or clear the search to see everybody again."
+                                action={
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => reload({ search: null })}
+                                    >
+                                        Clear search
+                                    </Button>
+                                }
+                            />
+                        ) : (
+                            <EmptyState
+                                icon={Users}
+                                title="Nobody in this circle yet"
+                                description="Once people join, what they share here will be counted."
+                            />
+                        )
                     ) : (
                         <>
                             <div className="overflow-x-auto rounded-card border border-border shadow-card">

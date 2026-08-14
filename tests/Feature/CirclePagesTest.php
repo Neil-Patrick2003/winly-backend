@@ -303,6 +303,86 @@ test('a range that ends before it starts is refused', function () {
         ->assertSessionHasErrors('to');
 });
 
+test('the search narrows the tracker to the members named', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'search' => 'bea']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            // Narrowing the list leaves the counting alone: the same range in
+            // the same circles, with fewer people listed against it.
+            ->where('members.data.0.wins.meditation', 1)
+            ->where('search', 'bea')
+        );
+});
+
+test('the search matches a username as well as a name', function () {
+    $this->owner->update(['username' => 'sitting_ada']);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'search' => 'sitting']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+        );
+});
+
+test('a search matching nobody empties the list rather than ignoring itself', function () {
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'search' => 'nobody here']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 0)
+            ->where('search', 'nobody here')
+        );
+});
+
+test('a blank search lists everybody rather than looking for nothing', function () {
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'search' => '   ']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 2)
+            ->where('search', null)
+        );
+});
+
+test('the search travels with the range and the circles counted', function () {
+    $inner = Circle::factory()->create([
+        'owner_id' => $this->owner->id,
+        'parent_id' => $this->circle->id,
+        'name' => 'Beginners',
+    ]);
+    CircleMembership::create([
+        'user_id' => $this->member->id,
+        'circle_id' => $inner->id,
+        'joined_at' => now(),
+    ]);
+
+    shareWin($inner, $this->member, 'movement', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'circles' => [$inner->id],
+            'from' => today()->subDays(6)->toDateString(),
+            'to' => today()->toDateString(),
+            'search' => 'bea',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('days', 7)
+            ->where('selectedCircles', [$inner->id])
+            ->where('search', 'bea')
+            ->has('members.data', 1)
+            ->where('members.data.0.wins.movement', 1)
+        );
+});
+
 test('the tracker runs the same queries however many members there are', function () {
     $measure = function (): int {
         DB::flushQueryLog();
