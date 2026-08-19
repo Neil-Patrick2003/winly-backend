@@ -454,6 +454,12 @@ class CircleController extends Controller
             'members' => $members->through(function (User $member) use ($counts, $daysLogged): array {
                 $wins = $counts[$member->id] ?? [];
 
+                $byType = collect(Post::WIN_TYPES)
+                    ->mapWithKeys(fn (string $type): array => [
+                        $type => (int) ($wins[$type] ?? 0),
+                    ])
+                    ->all();
+
                 return [
                     'id' => $member->id,
                     'full_name' => $member->full_name,
@@ -471,12 +477,18 @@ class CircleController extends Controller
                      */
                     'streak_days' => $member->currentStreak(),
                     'longest_streak' => $member->longest_streak,
-                    'wins' => collect(Post::WIN_TYPES)
-                        ->mapWithKeys(fn (string $type): array => [
-                            $type => (int) ($wins[$type] ?? 0),
-                        ])
-                        ->all(),
+                    'wins' => $byType,
                     'total' => $daysLogged[$member->id] ?? 0,
+                    /*
+                     * Every win counts once, so the points are the wins added
+                     * up rather than a stored score.
+                     *
+                     * Deliberately not the same number as `total`: that one
+                     * counts the days somebody turned up, and this one counts
+                     * what they did on them. Three wins in one evening is one
+                     * day and three points.
+                     */
+                    'total_points' => array_sum($byType),
                 ];
             }),
         ]);
