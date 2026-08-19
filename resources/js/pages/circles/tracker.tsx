@@ -327,9 +327,9 @@ export default function Tracker({
                             <div className="overflow-x-auto rounded-card border border-border shadow-card">
                                 <table className="w-full border-collapse">
                                     <caption className="sr-only">
-                                        Wins by kind for each member of{' '}
-                                        {circle.name}, from {readable(from)} to{' '}
-                                        {readable(to)}
+                                        Wins by kind, days logged and points for
+                                        each member of {circle.name}, from{' '}
+                                        {readable(from)} to {readable(to)}
                                     </caption>
 
                                     <thead>
@@ -380,6 +380,13 @@ export default function Tracker({
                                                 className="px-4 py-2.5 text-right text-label font-medium tracking-wide text-muted-foreground uppercase"
                                             >
                                                 Total days
+                                            </th>
+
+                                            <th
+                                                scope="col"
+                                                className="px-4 py-2.5 text-right text-label font-medium tracking-wide text-muted-foreground uppercase"
+                                            >
+                                                Total points
                                             </th>
                                         </tr>
                                     </thead>
@@ -485,6 +492,32 @@ export default function Tracker({
                                                 <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">
                                                     {member.total}
                                                 </td>
+
+                                                <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <span
+                                                                className={cn(
+                                                                    'tabular-nums',
+                                                                    member.total_points ===
+                                                                        0 &&
+                                                                        'font-normal text-muted-foreground/40',
+                                                                )}
+                                                            >
+                                                                {member.total_points ===
+                                                                0
+                                                                    ? '—'
+                                                                    : member.total_points}
+                                                            </span>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            {member.total_points ===
+                                                            1
+                                                                ? '1 point — one kind, on one day'
+                                                                : `${member.total_points} points, one per kind per day`}
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -495,8 +528,13 @@ export default function Tracker({
                                 A dash means none of that kind in this range.
                                 Total days counts the days somebody logged at
                                 least one win here, so three in one day still
-                                counts once. The streak counts days in a row
-                                with a win, wherever it was shared.
+                                counts once. Points go by kind: each kind is
+                                worth a point on a day it was logged, however
+                                often it was logged that day — so a day with all
+                                three is worth three, and posting the same kind
+                                again is worth nothing further. The streak
+                                counts days in a row with a win, wherever it was
+                                shared.
                             </p>
 
                             <Pagination page={members} label="members" />

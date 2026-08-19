@@ -429,7 +429,11 @@ class CircleController extends Controller
             ->all());
 
         $counts = $this->winCounts($counting, $userIds, $request->from(), $request->to());
-        $daysLogged = $this->daysLogged($counting, $userIds, $request->from(), $request->to());
+
+        // One gathering of the days behind both of the last two columns.
+        $logged = $this->loggedDays($counting, $userIds, $request->from(), $request->to());
+        $daysLogged = $this->daysLogged($logged);
+        $pointsScored = $this->pointsScored($logged);
 
         return Inertia::render('circles/tracker', [
             /*
@@ -451,8 +455,14 @@ class CircleController extends Controller
             'from' => $request->from()->toDateString(),
             'to' => $request->to()->toDateString(),
             'days' => $request->days(),
-            'members' => $members->through(function (User $member) use ($counts, $daysLogged): array {
+            'members' => $members->through(function (User $member) use ($counts, $daysLogged, $pointsScored): array {
                 $wins = $counts[$member->id] ?? [];
+
+                $byType = collect(Post::WIN_TYPES)
+                    ->mapWithKeys(fn (string $type): array => [
+                        $type => (int) ($wins[$type] ?? 0),
+                    ])
+                    ->all();
 
                 return [
                     'id' => $member->id,
@@ -471,12 +481,14 @@ class CircleController extends Controller
                      */
                     'streak_days' => $member->currentStreak(),
                     'longest_streak' => $member->longest_streak,
-                    'wins' => collect(Post::WIN_TYPES)
-                        ->mapWithKeys(fn (string $type): array => [
-                            $type => (int) ($wins[$type] ?? 0),
-                        ])
-                        ->all(),
+                    'wins' => $byType,
                     'total' => $daysLogged[$member->id] ?? 0,
+                    /*
+                     * A point per kind per day, so a day with all three kinds
+                     * on it is worth three and a second sitting that evening is
+                     * worth nothing further.
+                     */
+                    'total_points' => $pointsScored[$member->id] ?? 0,
                 ];
             }),
         ]);
@@ -538,36 +550,40 @@ class CircleController extends Controller
     }
 
     /**
-     * On how many days each of these people logged extreme self care here.
+     * Which days each of these people logged each kind of win here.
      *
-     * Deliberately not the sum of the win columns: three wins on one Tuesday is
-     * still one day of showing up, and the last column of the tracker is about
-     * how often somebody turned up rather than how much they stacked into a
-     * single day. Counting sums would let one busy afternoon outrank a month of
-     * steady practice.
+     * The raw material behind both of the tracker's last two columns, gathered
+     * once. Days are read off `completed_at`, the same field the columns filter
+     * on, so a sitting done on Sunday and shared on Monday counts for Sunday.
+     * The three detail tables cannot be counted together, so each contributes
+     * its own dates and they are folded together in PHP.
      *
-     * Days are read off `completed_at`, the same field the columns filter on,
-     * so a sitting done on Sunday and shared on Monday counts for Sunday. The
-     * three detail tables cannot be counted together, so each contributes its
-     * dates and the union is taken in PHP — a day with a sitting and a run on
-     * it must not count twice.
+     * Dates rather than counts, because both columns are about days somebody
+     * turned up rather than posts they filed: a second sitting on a Tuesday
+     * already covered lands on a key that is already there.
      *
      * @param  list<string>  $circleIds  This circle and any counted with it.
      * @param  list<string>  $userIds
-     * @return array<string, int> Keyed by user.
+     * @return array<string, array<string, array<string, true>>> Keyed by user,
+     *                                                           then win type,
+     *                                                           then date.
      */
-    protected function daysLogged(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    protected function loggedDays(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
         }
 
-        /** @var array<string, array<string, true>> $seen */
+        /** @var array<string, array<string, array<string, true>>> $seen */
         $seen = [];
 
-        $winModels = [new WinMeditation, new WinLearning, new WinMovement];
+        $winModels = [
+            'meditation' => new WinMeditation,
+            'learning' => new WinLearning,
+            'movement' => new WinMovement,
+        ];
 
-        foreach ($winModels as $model) {
+        foreach ($winModels as $type => $model) {
             $table = $model->getTable();
             $posts = (new Post)->getTable();
 
@@ -588,11 +604,59 @@ class CircleController extends Controller
                 ->get();
 
             foreach ($rows as $row) {
-                $seen[$row->user_id][$row->logged_on] = true;
+                $seen[$row->user_id][$type][$row->logged_on] = true;
             }
         }
 
-        return array_map(fn (array $days): int => count($days), $seen);
+        return $seen;
+    }
+
+    /**
+     * On how many days each of these people logged extreme self care here.
+     *
+     * Deliberately not the sum of the win columns: three wins on one Tuesday is
+     * still one day of showing up, and the column is about how often somebody
+     * turned up rather than how much they stacked into a single day. Counting
+     * sums would let one busy afternoon outrank a month of steady practice.
+     *
+     * The kinds are unioned rather than added, so a day carrying both a sitting
+     * and a run counts once.
+     *
+     * @param  array<string, array<string, array<string, true>>>  $logged
+     * @return array<string, int> Keyed by user.
+     */
+    protected function daysLogged(array $logged): array
+    {
+        return array_map(function (array $byType): int {
+            $days = [];
+
+            foreach ($byType as $dates) {
+                $days += $dates;
+            }
+
+            return count($days);
+        }, $logged);
+    }
+
+    /**
+     * What each of these people scored here.
+     *
+     * A kind is worth a point on a day it was logged, however many times it was
+     * logged that day — so a full day of all three kinds scores three, and a
+     * fourth sitting that same evening scores nothing further. Adding the raw
+     * wins instead would pay somebody for posting the same practice twice, and
+     * counting whole days instead would say nothing the days column has not
+     * already said.
+     *
+     * @param  array<string, array<string, array<string, true>>>  $logged
+     * @return array<string, int> Keyed by user.
+     */
+    protected function pointsScored(array $logged): array
+    {
+        return array_map(
+            fn (array $byType): int => array_sum(array_map(count(...), $byType)),
+            $logged
+        );
     }
 
     /**

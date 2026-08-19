@@ -132,6 +132,83 @@ test('the total counts days logged, not wins stacked into one day', function () 
         );
 });
 
+test('a kind is worth one point on a day, however often it was logged', function () {
+    // Four wins, three of them stacked into today and one three days back.
+    shareWin($this->circle, $this->member, 'meditation', today()->setTime(7, 0));
+    shareWin($this->circle, $this->member, 'meditation', today()->setTime(12, 15));
+    shareWin($this->circle, $this->member, 'movement', today()->setTime(18, 30));
+    shareWin($this->circle, $this->member, 'learning', today()->subDays(3));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            // The column still reports both sittings.
+            ->where('members.data.1.wins.meditation', 2)
+            /*
+             * Today scores two — one sitting and one run, the second sitting
+             * paying nothing — and the learning three days back scores one.
+             */
+            ->where('members.data.1.total_points', 3)
+            // Two days were turned up for, whatever was done on them.
+            ->where('members.data.1.total', 2)
+            // Nobody has shared anything, so their score is not blank.
+            ->where('members.data.0.total_points', 0)
+        );
+});
+
+test('a full day of all three kinds is worth three points', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'learning', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.total_points', 3)
+            ->where('members.data.1.total', 1)
+        );
+
+    // Posting all three again the same day pays nothing further.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'learning', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.1.total_points', 3)
+            ->where('members.data.1.total', 1)
+        );
+});
+
+test('the same kind on a second day scores again', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'meditation', today()->subDay());
+    shareWin($this->circle, $this->member, 'meditation', today()->subDays(2));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', $this->circle))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('members.data.1.total_points', 3));
+});
+
+test('days left outside the range are not scored', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today()->subDays(20));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => today()->subDays(6)->toDateString(),
+            'to' => today()->toDateString(),
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('members.data.1.total_points', 1));
+});
+
 test('days outside the range are not counted in the total', function () {
     shareWin($this->circle, $this->member, 'meditation', today());
     shareWin($this->circle, $this->member, 'movement', today()->subDays(20));

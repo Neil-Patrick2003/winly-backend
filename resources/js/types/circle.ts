@@ -158,6 +158,8 @@ export type TrackerRow = {
     wins: Record<WinType, number>;
     /** Days with at least one win in range — not the sum of `wins`. */
     total: number;
+    /** A point per kind per day it was logged — never more than 3 a day. */
+    total_points: number;
 };
 
 export type TrackerRange = '7' | '30' | '90' | 'all';
