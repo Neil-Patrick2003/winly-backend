@@ -513,8 +513,8 @@ export default function Tracker({
                                                         <TooltipContent>
                                                             {member.total_points ===
                                                             1
-                                                                ? '1 point, one for the win'
-                                                                : `${member.total_points} points, one per win`}
+                                                                ? '1 point — one kind, on one day'
+                                                                : `${member.total_points} points, one per kind per day`}
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </td>
@@ -528,9 +528,13 @@ export default function Tracker({
                                 A dash means none of that kind in this range.
                                 Total days counts the days somebody logged at
                                 least one win here, so three in one day still
-                                counts once — total points counts all three, one
-                                per win. The streak counts days in a row with a
-                                win, wherever it was shared.
+                                counts once. Points go by kind: each kind is
+                                worth a point on a day it was logged, however
+                                often it was logged that day — so a day with all
+                                three is worth three, and posting the same kind
+                                again is worth nothing further. The streak
+                                counts days in a row with a win, wherever it was
+                                shared.
                             </p>
 
                             <Pagination page={members} label="members" />
