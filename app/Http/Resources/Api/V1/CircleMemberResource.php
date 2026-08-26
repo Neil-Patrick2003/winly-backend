@@ -29,11 +29,24 @@ class CircleMemberResource extends JsonResource
             ...(new UserSummaryResource($this->user))->toArray($request),
             'joined_at' => $this->joined_at->toIso8601String(),
             /*
-             * Whether this member made the circle, so the list can mark them.
-             * Loaded with the membership's circle where the caller asked for
-             * it; absent otherwise.
+             * Whether this member runs the circle, so the list can mark them.
+             *
+             * True for whoever made it and for anyone since given the same run
+             * of it: the list is telling the group who to go to, and on that
+             * question the two are the same person. Loaded with the
+             * membership's circle where the caller asked for it; absent
+             * otherwise.
              */
             'is_owner' => $this->when(
+                $this->relationLoaded('circle'),
+                fn (): bool => $this->circle->owner_id === $this->user_id
+                    || $this->role === CircleMembership::ROLE_OWNER,
+            ),
+            /*
+             * Whether they made it, for a client that wants to tell the founder
+             * apart from the people helping run it.
+             */
+            'is_founder' => $this->when(
                 $this->relationLoaded('circle'),
                 fn (): bool => $this->circle->owner_id === $this->user_id,
             ),

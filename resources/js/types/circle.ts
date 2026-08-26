@@ -56,7 +56,13 @@ export type CircleMember = {
     username: string | null;
     avatar_url: string | null;
     joined_at: string | null;
+    /** Made the circle. There is one, and they cannot be demoted or removed. */
     is_owner: boolean;
+    /**
+     * Runs the circle without having made it — every ability the founder has.
+     * Kept apart from `is_owner` because this rank can be given and taken back.
+     */
+    is_co_owner: boolean;
 };
 
 /** One account on the staff people screen. */

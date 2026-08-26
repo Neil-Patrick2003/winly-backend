@@ -355,6 +355,43 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
     }
 
     /**
+     * The circles this person has been given the run of, once they are known.
+     *
+     * @var array<string, true>|null
+     */
+    protected ?array $ownerRanks = null;
+
+    /**
+     * Whether this person holds the owner rank in a circle.
+     *
+     * Read once and kept for the rest of the request, because the question is
+     * asked of every circle on a page: a list of thirty would otherwise be
+     * thirty queries for an answer that is one short list either way. The list
+     * is short by nature — it is the circles somebody has been trusted to run,
+     * not the circles they are in.
+     *
+     * Says nothing about `circles.owner_id`; the policy asks about that
+     * separately, off a column it already has in hand.
+     */
+    public function holdsOwnerRankIn(?string $circleId): bool
+    {
+        if ($circleId === null) {
+            return false;
+        }
+
+        $this->ownerRanks ??= array_fill_keys(
+            CircleMembership::query()
+                ->where('user_id', $this->getKey())
+                ->where('role', CircleMembership::ROLE_OWNER)
+                ->pluck('circle_id')
+                ->all(),
+            true,
+        );
+
+        return isset($this->ownerRanks[$circleId]);
+    }
+
+    /**
      * Load the active-story flag onto this user.
      *
      * The scope answers the question for a query; this answers it for a model

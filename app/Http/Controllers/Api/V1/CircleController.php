@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Actions\Circles\BlockFromCircle;
 use App\Actions\Circles\CreateCircle;
 use App\Actions\Circles\RemoveCircleMember;
+use App\Actions\Circles\TransferCircleOwnership;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexCircleRequest;
 use App\Http\Requests\Api\V1\StoreCircleRequest;
@@ -42,7 +43,9 @@ class CircleController extends Controller
      *
      * Both in one list rather than two endpoints: the screen shows them
      * together, and `is_owner` on each row is the only thing that separates
-     * them.
+     * them. It answers for a circle somebody was given the run of as well as
+     * for one they made — the two hold the same rank, and `is_founder` is there
+     * for a screen that wants to tell them apart.
      *
      * @return AnonymousResourceCollection<int, CircleResource>
      */
@@ -529,8 +532,12 @@ class CircleController extends Controller
      * is not in it would leave it run by an outsider, whose first act would be
      * joining the thing they already own.
      */
-    public function assignOwner(Request $request, Circle $circle, User $user): JsonResponse
-    {
+    public function assignOwner(
+        Request $request,
+        Circle $circle,
+        User $user,
+        TransferCircleOwnership $transfer,
+    ): JsonResponse {
         Gate::authorize('update', $circle);
 
         if (! $circle->isSubCircle()) {
@@ -545,7 +552,15 @@ class CircleController extends Controller
             ]);
         }
 
-        $circle->update(['owner_id' => $user->getKey()]);
+        /*
+         * Through the action rather than writing the column here.
+         *
+         * Ownership is no longer one column: a circle can be run by several
+         * people, and a handover has to stand the previous ones down as well as
+         * name the new one. Setting `owner_id` alone would leave whoever held
+         * the circle before still running it.
+         */
+        $transfer->execute($circle, $user);
 
         return (new CircleResource($circle->fresh()?->load('owner')))->response();
     }

@@ -191,6 +191,11 @@ class CircleController extends Controller
                 'wins_count' => $membership->user->wins_count,
                 'joined_at' => $membership->joined_at->toIso8601String(),
                 'is_owner' => $membership->user_id === $circle->owner_id,
+                // Runs the circle without having made it. Marked apart from the
+                // founder, because the list is telling the group who to go to
+                // rather than who started it.
+                'is_co_owner' => $membership->role === CircleMembership::ROLE_OWNER
+                    && $membership->user_id !== $circle->owner_id,
             ]);
 
         return Inertia::render('circles/members', [

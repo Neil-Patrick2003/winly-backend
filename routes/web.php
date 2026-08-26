@@ -81,6 +81,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('invitations/{invitation}', [CircleManagementController::class, 'revokeInvitation'])->name('invitations.destroy');
 
         Route::delete('members/{user}', [CircleManagementController::class, 'removeMember'])->name('members.remove');
+        // Who else runs the place. The owner's to decide, unlike handing the
+        // circle over — that one is staff's, below.
+        Route::patch('members/{user}/role', [CircleManagementController::class, 'setMemberRole'])->name('members.role');
         Route::post('blocks/{user}', [CircleManagementController::class, 'block'])->name('blocks.store');
         Route::delete('blocks/{user}', [CircleManagementController::class, 'unblock'])->name('blocks.destroy');
 

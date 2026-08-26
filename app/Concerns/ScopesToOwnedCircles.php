@@ -12,11 +12,14 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Narrows a console statistic to the circles the viewer owns.
+ * Narrows a console statistic to the circles the viewer runs.
  *
  * The console answers "how are my circles doing", so every figure is bounded by
- * `circles.owner_id`. Owning nothing is a legitimate state: each of these
- * returns an empty set rather than the whole app.
+ * the circles this person owns — the ones they made, and the ones somebody has
+ * since given them the run of. Both are the same rank, so a circle run jointly
+ * appears on both consoles rather than only on the founder's. Running nothing
+ * is a legitimate state: each of these returns an empty set rather than the
+ * whole app.
  */
 trait ScopesToOwnedCircles
 {
@@ -29,7 +32,7 @@ trait ScopesToOwnedCircles
     protected function ownedCircleIds(User $owner): BuilderContract
     {
         return Circle::query()
-            ->where('owner_id', $owner->id)
+            ->runBy($owner)
             ->select('id');
     }
 
@@ -40,7 +43,7 @@ trait ScopesToOwnedCircles
      */
     protected function ownedCircles(User $owner): Builder
     {
-        return Circle::query()->where('owner_id', $owner->id);
+        return Circle::query()->runBy($owner);
     }
 
     /**
@@ -67,7 +70,7 @@ trait ScopesToOwnedCircles
     {
         return Post::query()->whereHas(
             'circles',
-            fn (Builder $circles) => $circles->where('circles.owner_id', $owner->id),
+            fn (Builder $circles) => $circles->whereIn('circles.id', $this->ownedCircleIds($owner)),
         );
     }
 
@@ -84,7 +87,16 @@ trait ScopesToOwnedCircles
                 ->from('circle_post')
                 ->join('circles', 'circles.id', '=', 'circle_post.circle_id')
                 ->whereColumn('circle_post.post_id', "{$table}.post_id")
-                ->where('circles.owner_id', $owner->id),
+                // Written out rather than borrowed from the Eloquent scope:
+                // there is no model here to hang one on, and the two have to
+                // say the same thing.
+                ->where(fn (QueryBuilder $runs) => $runs
+                    ->where('circles.owner_id', $owner->id)
+                    ->orWhereExists(fn (QueryBuilder $rank) => $rank
+                        ->from('circle_memberships')
+                        ->whereColumn('circle_memberships.circle_id', 'circles.id')
+                        ->where('circle_memberships.user_id', $owner->id)
+                        ->where('circle_memberships.role', CircleMembership::ROLE_OWNER))),
         );
     }
 }

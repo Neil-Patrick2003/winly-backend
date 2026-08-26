@@ -56,6 +56,10 @@ class CreateCircle
             CircleMembership::create([
                 'user_id' => $owner->getKey(),
                 'circle_id' => $circle->getKey(),
+                // Carried on the membership as well as in `owner_id`, so that
+                // "who runs this circle" is one question of one table however
+                // many people end up answering to it.
+                'role' => CircleMembership::ROLE_OWNER,
                 'joined_at' => now(),
             ]);
 
