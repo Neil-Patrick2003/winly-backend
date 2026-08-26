@@ -22,6 +22,9 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -399,8 +402,21 @@ class CircleController extends Controller
          * and the subquery a paginator wraps the count in refuses it first.
          */
         $search = $request->search();
+        $filters = $request->filters();
+        $sort = $request->sort();
 
-        $members = User::query()
+        /*
+         * Everybody this tab could list, in name order, before a number is
+         * weighed against any of them.
+         *
+         * Ids and the two streak columns rather than whole rows: the twenty on
+         * the page are fetched in full further down, and everyone else is here
+         * only to be counted, filtered and put in order. The list has to be
+         * whole for that — filtering or reordering twenty rows already chosen
+         * alphabetically would answer a different question on every page, and
+         * hand back a page count that still counted everybody.
+         */
+        $candidates = User::query()
             ->whereIn('id', CircleMembership::query()
                 ->whereIn('circle_id', $counting)
                 ->select('user_id'))
@@ -421,19 +437,116 @@ class CircleController extends Controller
             // The id breaks ties, so a page boundary does not shuffle two
             // people who share a name.
             ->orderBy('id')
-            ->paginate(self::PER_PAGE)
-            ->withQueryString();
+            ->get(['id', 'full_name', 'last_win_on', 'streak_days']);
 
-        $userIds = array_values($members->getCollection()
-            ->map(fn (User $member): string => $member->id)
-            ->all());
+        /*
+         * Everyone's days and everyone's wins, but only where something asks.
+         *
+         * The ordinary tab asks nothing of either beyond the twenty it is about
+         * to show, and gathering the whole circle for it would be work nobody
+         * reads. A filter or an order that runs on the numbers does ask, and
+         * has to be answered for everybody at once.
+         */
+        $everyoneLogged = $request->weighsEveryone()
+            ? $this->loggedDays($counting, null, $request->from(), $request->to())
+            : null;
 
-        $counts = $this->winCounts($counting, $userIds, $request->from(), $request->to());
+        $everyoneCounts = $request->ranksByKind()
+            ? $this->winCounts($counting, null, $request->from(), $request->to())
+            : null;
+
+        $awarded = $everyoneLogged === null
+            ? null
+            : $this->awardedMembers($request, $counting, $everyoneLogged);
+
+        $ordered = $this->rankMembers(
+            $candidates,
+            $filters,
+            $sort,
+            $everyoneLogged,
+            $everyoneCounts,
+            $awarded
+        );
+
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $pageIds = array_slice($ordered, ($currentPage - 1) * self::PER_PAGE, self::PER_PAGE);
+
+        $onPage = User::query()->whereIn('id', $pageIds)->get()->keyBy('id');
+
+        /*
+         * The page's numbers, taken from what was already gathered where the
+         * whole circle had to be weighed anyway.
+         */
+        $pageKeys = array_flip($pageIds);
+
+        $counts = $everyoneCounts !== null
+            ? array_intersect_key($everyoneCounts, $pageKeys)
+            : $this->winCounts($counting, $pageIds, $request->from(), $request->to());
 
         // One gathering of the days behind both of the last two columns.
-        $logged = $this->loggedDays($counting, $userIds, $request->from(), $request->to());
+        $logged = $everyoneLogged !== null
+            ? array_intersect_key($everyoneLogged, $pageKeys)
+            : $this->loggedDays($counting, $pageIds, $request->from(), $request->to());
+
         $daysLogged = $this->daysLogged($logged);
         $pointsScored = $this->pointsScored($logged);
+
+        $rows = [];
+
+        foreach ($pageIds as $id) {
+            $member = $onPage->get($id);
+
+            if ($member === null) {
+                continue;
+            }
+
+            $wins = $counts[$id] ?? [];
+
+            $rows[] = [
+                'id' => $member->id,
+                'full_name' => $member->full_name,
+                'username' => $member->username,
+                'avatar_url' => $member->avatar_url,
+                /*
+                 * The streak still standing, not the stored column.
+                 *
+                 * `streak_days` is the run ending at the member's last win,
+                 * whenever that was — it keeps its number long after the run is
+                 * over, which is how somebody with an empty row ends up wearing
+                 * a one day streak. `currentStreak()` is what decides it has
+                 * lapsed, and it is what the profile and the API already answer
+                 * with.
+                 */
+                'streak_days' => $member->currentStreak(),
+                'longest_streak' => $member->longest_streak,
+                'wins' => collect(Post::WIN_TYPES)
+                    ->mapWithKeys(fn (string $type): array => [
+                        $type => (int) ($wins[$type] ?? 0),
+                    ])
+                    ->all(),
+                'total' => $daysLogged[$id] ?? 0,
+                /*
+                 * A point per kind per day, so a day with all three kinds on it
+                 * is worth three and a second sitting that evening is worth
+                 * nothing further.
+                 */
+                'total_points' => $pointsScored[$id] ?? 0,
+            ];
+        }
+
+        /*
+         * Built by hand rather than by `paginate()`, because the order and the
+         * total are settled in PHP: points and days are counted off dates the
+         * database cannot group the way the columns read them, and the streak
+         * is a lapse rule rather than a column.
+         */
+        $members = (new LengthAwarePaginator(
+            $rows,
+            count($ordered),
+            self::PER_PAGE,
+            $currentPage,
+            ['path' => Paginator::resolveCurrentPath()]
+        ))->withQueryString();
 
         return Inertia::render('circles/tracker', [
             /*
@@ -450,48 +563,251 @@ class CircleController extends Controller
                 ->all(),
             'selectedCircles' => $counting,
             'search' => $search,
+            'filters' => $filters,
+            'sort' => $sort,
             'circle' => $this->circleProps($request, $circle),
             'winTypes' => Post::WIN_TYPES,
             'from' => $request->from()->toDateString(),
             'to' => $request->to()->toDateString(),
             'days' => $request->days(),
-            'members' => $members->through(function (User $member) use ($counts, $daysLogged, $pointsScored): array {
-                $wins = $counts[$member->id] ?? [];
-
-                $byType = collect(Post::WIN_TYPES)
-                    ->mapWithKeys(fn (string $type): array => [
-                        $type => (int) ($wins[$type] ?? 0),
-                    ])
-                    ->all();
-
-                return [
-                    'id' => $member->id,
-                    'full_name' => $member->full_name,
-                    'username' => $member->username,
-                    'avatar_url' => $member->avatar_url,
-                    /*
-                     * The streak still standing, not the stored column.
-                     *
-                     * `streak_days` is the run ending at the member's last win,
-                     * whenever that was — it keeps its number long after the
-                     * run is over, which is how somebody with an empty row
-                     * ends up wearing a one day streak. `currentStreak()` is
-                     * what decides it has lapsed, and it is what the profile
-                     * and the API already answer with.
-                     */
-                    'streak_days' => $member->currentStreak(),
-                    'longest_streak' => $member->longest_streak,
-                    'wins' => $byType,
-                    'total' => $daysLogged[$member->id] ?? 0,
-                    /*
-                     * A point per kind per day, so a day with all three kinds
-                     * on it is worth three and a second sitting that evening is
-                     * worth nothing further.
-                     */
-                    'total_points' => $pointsScored[$member->id] ?? 0,
-                ];
-            }),
+            'members' => $members,
         ]);
+    }
+
+    /**
+     * Who the tab lists, in the order it lists them.
+     *
+     * Every filter here narrows the rows rather than the counting: a member who
+     * survives one is shown the same numbers the unfiltered tab would have
+     * shown them. They are applied together and each has to pass, so a panel
+     * with several boxes ticked reads as one question rather than several.
+     *
+     * Ordering is settled here too, on figures the database cannot sort by:
+     * points and days are counted off dates it cannot group the way the columns
+     * read them, and the streak is a lapse rule rather than the stored column.
+     * The sort is stable and the candidates arrive alphabetically, so people
+     * level on a number stay in name order rather than shuffling between loads.
+     *
+     * @param  Collection<int, User>  $candidates  In name order.
+     * @param  array{
+     *     completion: array{with_reference: bool, complete: bool, exclude_referenced: bool},
+     *     activity: list<string>,
+     *     kinds: list<string>,
+     *     min_points: int|null,
+     *     min_days: int|null,
+     *     streaking: bool,
+     *     min_streak: int|null,
+     * }  $filters
+     * @param  array{by: string, direction: string}  $sort
+     * @param  array<string, array<string, array<string, true>>>|null  $logged
+     * @param  array<string, array<string, int>>|null  $counts
+     * @param  list<string>|null  $awarded  Null where no award was asked for.
+     * @return list<string> Member ids, in the order the table shows them.
+     */
+    protected function rankMembers(
+        Collection $candidates,
+        array $filters,
+        array $sort,
+        ?array $logged,
+        ?array $counts,
+        ?array $awarded,
+    ): array {
+        $daysLogged = $logged === null ? [] : $this->daysLogged($logged);
+        $pointsScored = $logged === null ? [] : $this->pointsScored($logged);
+
+        // A lookup rather than a scan, so a circle of hundreds is not searched
+        // once per member.
+        $awardedKeys = $awarded === null ? null : array_flip($awarded);
+
+        $ranked = [];
+
+        foreach ($candidates as $member) {
+            $id = $member->id;
+            $days = $daysLogged[$id] ?? 0;
+            $points = $pointsScored[$id] ?? 0;
+            $streak = $member->currentStreak();
+
+            if ($awardedKeys !== null && ! isset($awardedKeys[$id])) {
+                continue;
+            }
+
+            /*
+             * Turned up, or did not. Both boxes ticked is everybody, which is
+             * what neither of them already says — so it takes exactly one of
+             * them to narrow anything.
+             */
+            if (count($filters['activity']) === 1
+                && ($filters['activity'][0] === 'active') !== ($days > 0)) {
+                continue;
+            }
+
+            // Every kind ticked rather than any of them: the box asks what a
+            // practice looks like, and somebody doing one of two is not doing
+            // both.
+            foreach ($filters['kinds'] as $kind) {
+                if (($logged[$id][$kind] ?? []) === []) {
+                    continue 2;
+                }
+            }
+
+            if ($filters['min_points'] !== null && $points < $filters['min_points']) {
+                continue;
+            }
+
+            if ($filters['min_days'] !== null && $days < $filters['min_days']) {
+                continue;
+            }
+
+            // A run that has lapsed is not a run, which is what
+            // `currentStreak()` already decided — the stored column would say
+            // otherwise long after it ended.
+            if ($filters['streaking'] && $streak === 0) {
+                continue;
+            }
+
+            if ($filters['min_streak'] !== null && $streak < $filters['min_streak']) {
+                continue;
+            }
+
+            $ranked[] = [
+                'id' => $id,
+                'streak' => $streak,
+                'days' => $days,
+                'points' => $points,
+                // The win column being ordered by, where one is. Counting wins
+                // rather than days, which is what that column shows.
+                'kind' => (int) ($counts[$id][$sort['by']] ?? 0),
+            ];
+        }
+
+        if ($sort['by'] === 'name') {
+            $names = array_column($ranked, 'id');
+
+            return $sort['direction'] === 'desc' ? array_reverse($names) : $names;
+        }
+
+        $on = in_array($sort['by'], Post::WIN_TYPES, true) ? 'kind' : $sort['by'];
+        $rising = $sort['direction'] === 'asc' ? 1 : -1;
+
+        usort($ranked, fn (array $a, array $b): int => $rising * ($a[$on] <=> $b[$on]));
+
+        return array_column($ranked, 'id');
+    }
+
+    /**
+     * Who the award filters leave standing, or null where none were ticked.
+     *
+     * Two awards, and the boxes are a union rather than a narrowing: ticking
+     * both asks for everybody who finished, cited or not. `exclude_referenced`
+     * is the one exception — it takes the cited finishers back out of the
+     * plain award, so a circle handing out two prizes can list the people each
+     * one is for without the same names appearing under both.
+     *
+     * @param  list<string>  $circleIds  This circle and any counted with it.
+     * @param  array<string, array<string, array<string, true>>>  $logged  Every
+     *                                                                     member's days, gathered already.
+     * @return list<string>|null Null where the tab is unfiltered.
+     */
+    protected function awardedMembers(IndexTrackerRequest $request, array $circleIds, array $logged): ?array
+    {
+        $wanted = $request->completionFilters();
+
+        if (! $wanted['with_reference'] && ! $wanted['complete']) {
+            return null;
+        }
+
+        $runs = $this->completeRuns($logged, $circleIds, $request->from(), $request->to(), $request->days());
+
+        $awarded = $wanted['with_reference'] ? $runs['with_reference'] : [];
+
+        if ($wanted['complete']) {
+            $awarded = array_merge($awarded, $wanted['exclude_referenced']
+                ? array_diff($runs['complete'], $runs['with_reference'])
+                : $runs['complete']);
+        }
+
+        return array_values(array_unique($awarded));
+    }
+
+    /**
+     * Who logged every kind on every day of the range, and who cited as well.
+     *
+     * A complete run is the whole range with nothing missed: all three kinds
+     * on each of its days. Days rather than wins is what the points column
+     * already counts — a second sitting on a Tuesday already covered adds
+     * nothing, and cannot stand in for the Wednesday nobody logged. So the
+     * days gathered for the columns answer this too.
+     *
+     * The cited award asks more of the learning — every learning win in the
+     * range carries a source, not merely one of them — so it is the finishers
+     * less anyone who left a source out.
+     *
+     * @param  array<string, array<string, array<string, true>>>  $logged  Every
+     *                                                                     member's days, keyed by user then kind.
+     * @param  list<string>  $circleIds  This circle and any counted with it.
+     * @param  int  $days  How many days the range covers, both ends included.
+     * @return array{complete: list<string>, with_reference: list<string>}
+     */
+    protected function completeRuns(array $logged, array $circleIds, CarbonInterface $from, CarbonInterface $to, int $days): array
+    {
+        $complete = [];
+
+        foreach ($logged as $userId => $byType) {
+            foreach (Post::WIN_TYPES as $type) {
+                if (count($byType[$type] ?? []) !== $days) {
+                    continue 2;
+                }
+            }
+
+            $complete[] = (string) $userId;
+        }
+
+        return [
+            'complete' => $complete,
+            'with_reference' => array_values(array_diff(
+                $complete,
+                $this->uncitedLearners($circleIds, $from, $to)
+            )),
+        ];
+    }
+
+    /**
+     * Who left a source out of a learning win here, even once.
+     *
+     * A blank string counts as nothing cited, whatever the column holds: a box
+     * submitted empty is not a reference, and storing it as `''` rather than
+     * null is a detail of the form rather than a claim about the learning.
+     *
+     * @param  list<string>  $circleIds  This circle and any counted with it.
+     * @return list<string>
+     */
+    protected function uncitedLearners(array $circleIds, CarbonInterface $from, CarbonInterface $to): array
+    {
+        $table = (new WinLearning)->getTable();
+        $posts = (new Post)->getTable();
+
+        $rows = WinLearning::query()
+            ->join($posts, "{$posts}.id", '=', "{$table}.post_id")
+            ->whereExists(fn (BaseBuilder $shared) => $shared
+                ->from('circle_post')
+                ->whereColumn('circle_post.post_id', "{$posts}.id")
+                ->whereIn('circle_post.circle_id', $circleIds))
+            ->whereBetween("{$table}.completed_at", [$from, $to])
+            ->where(fn (Builder $blank) => $blank
+                ->whereNull("{$table}.reference_source")
+                ->orWhere("{$table}.reference_source", ''))
+            ->select("{$posts}.user_id")
+            ->distinct()
+            ->toBase()
+            ->get();
+
+        $learners = [];
+
+        foreach ($rows as $row) {
+            $learners[] = (string) $row->user_id;
+        }
+
+        return $learners;
     }
 
     /**
@@ -506,10 +822,12 @@ class CircleController extends Controller
      * Sunday.
      *
      * @param  list<string>  $circleIds  This circle and any counted with it.
-     * @param  list<string>  $userIds
+     * @param  list<string>|null  $userIds  Null counts for everyone who posted
+     *                                      here, which is what ordering the
+     *                                      whole tab by a win column needs.
      * @return array<string, array<string, int>> Keyed by user, then win type.
      */
-    protected function winCounts(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    protected function winCounts(array $circleIds, ?array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
@@ -536,7 +854,8 @@ class CircleController extends Controller
                     ->from('circle_post')
                     ->whereColumn('circle_post.post_id', "{$posts}.id")
                     ->whereIn('circle_post.circle_id', $circleIds))
-                ->whereIn("{$posts}.user_id", $userIds)
+                ->when($userIds !== null, fn (Builder $page) => $page
+                    ->whereIn("{$posts}.user_id", $userIds))
                 ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->groupBy("{$posts}.user_id")
                 ->pluck(DB::raw('count(*)'), "{$posts}.user_id");
@@ -563,12 +882,16 @@ class CircleController extends Controller
      * already covered lands on a key that is already there.
      *
      * @param  list<string>  $circleIds  This circle and any counted with it.
-     * @param  list<string>  $userIds
+     * @param  list<string>|null  $userIds  Null weighs everyone who posted
+     *                                      here, which is what deciding an
+     *                                      award needs — it settles who
+     *                                      reaches a page, so it cannot be
+     *                                      asked of one page's people.
      * @return array<string, array<string, array<string, true>>> Keyed by user,
      *                                                           then win type,
      *                                                           then date.
      */
-    protected function loggedDays(array $circleIds, array $userIds, CarbonInterface $from, CarbonInterface $to): array
+    protected function loggedDays(array $circleIds, ?array $userIds, CarbonInterface $from, CarbonInterface $to): array
     {
         if ($userIds === []) {
             return [];
@@ -593,7 +916,8 @@ class CircleController extends Controller
                     ->from('circle_post')
                     ->whereColumn('circle_post.post_id', "{$posts}.id")
                     ->whereIn('circle_post.circle_id', $circleIds))
-                ->whereIn("{$posts}.user_id", $userIds)
+                ->when($userIds !== null, fn (Builder $page) => $page
+                    ->whereIn("{$posts}.user_id", $userIds))
                 ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->select([
                     "{$posts}.user_id",

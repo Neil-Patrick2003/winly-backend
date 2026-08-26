@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Post;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class IndexTrackerRequest extends FormRequest
 {
@@ -12,6 +14,19 @@ class IndexTrackerRequest extends FormRequest
      * How far back the tracker looks when the caller does not say.
      */
     public const DEFAULT_DAYS = 30;
+
+    /**
+     * The columns the table can be ordered by.
+     *
+     * Every one of them is a column somebody can see, so an order they set is
+     * an order they can read back off the page.
+     */
+    public const SORTS = ['name', 'streak', 'days', 'points', 'meditation', 'learning', 'movement'];
+
+    /**
+     * Whether somebody turned up at all in the range.
+     */
+    public const ACTIVITY = ['active', 'inactive'];
 
     /**
      * Determine if the user is authorized to make this request.
@@ -53,6 +68,50 @@ class IndexTrackerRequest extends FormRequest
              * leaves both alone.
              */
             'search' => ['nullable', 'string', 'max:60'],
+
+            /*
+             * The award filters, each its own checkbox.
+             *
+             * Like the search, these narrow who is listed rather than what is
+             * counted: a filtered page still shows the same numbers against
+             * the same range, with fewer people standing next to them. None of
+             * them ticked is the ordinary tab, which is what an untouched set
+             * of boxes means.
+             */
+            'complete_with_reference' => ['nullable', 'boolean'],
+            'complete' => ['nullable', 'boolean'],
+            // Only meaningful alongside `complete`, and ignored without it.
+            'exclude_referenced' => ['nullable', 'boolean'],
+
+            /*
+             * Who turned up and who did not. Both together is everybody, which
+             * is what neither of them already means.
+             */
+            'activity' => ['nullable', 'array'],
+            'activity.*' => ['string', Rule::in(self::ACTIVITY)],
+
+            /*
+             * The kinds somebody has been logging. Ticking two asks for people
+             * doing both, not either — the box is about what a practice looks
+             * like, and somebody doing one of the two is not doing both.
+             */
+            'kinds' => ['nullable', 'array'],
+            'kinds.*' => ['string', Rule::in(Post::WIN_TYPES)],
+
+            /*
+             * Floors rather than exact figures, which is what a cutoff for an
+             * award is. Zero is allowed through validation and read as absent:
+             * a list of people with at least no points is the whole list.
+             */
+            'min_points' => ['nullable', 'integer', 'min:0'],
+            'min_days' => ['nullable', 'integer', 'min:0'],
+
+            // A streak still running, and how long it has to be.
+            'streaking' => ['nullable', 'boolean'],
+            'min_streak' => ['nullable', 'integer', 'min:0'],
+
+            'sort' => ['nullable', 'string', Rule::in(self::SORTS)],
+            'direction' => ['nullable', 'string', Rule::in(['asc', 'desc'])],
         ];
     }
 
@@ -91,6 +150,136 @@ class IndexTrackerRequest extends FormRequest
         $search = trim($this->string('search')->value());
 
         return $search === '' ? null : $search;
+    }
+
+    /**
+     * Which complete runs the reader asked to see, if any.
+     *
+     * `exclude_referenced` is folded away where `complete` is not ticked: it is
+     * a qualification on that box rather than a filter of its own, and left
+     * standing on its own it would read as an award nobody asked for.
+     *
+     * @return array{with_reference: bool, complete: bool, exclude_referenced: bool}
+     */
+    public function completionFilters(): array
+    {
+        $complete = $this->boolean('complete');
+
+        return [
+            'with_reference' => $this->boolean('complete_with_reference'),
+            'complete' => $complete,
+            'exclude_referenced' => $complete && $this->boolean('exclude_referenced'),
+        ];
+    }
+
+    /**
+     * Everything narrowing who is listed, gathered in one place.
+     *
+     * All of it narrows the rows rather than the range: a filtered page counts
+     * the same days in the same circles, with fewer people standing next to
+     * the numbers. Only the search is kept out, because it travels with the
+     * text box rather than with the filter panel.
+     *
+     * @return array{
+     *     completion: array{with_reference: bool, complete: bool, exclude_referenced: bool},
+     *     activity: list<string>,
+     *     kinds: list<string>,
+     *     min_points: int|null,
+     *     min_days: int|null,
+     *     streaking: bool,
+     *     min_streak: int|null,
+     * }
+     */
+    public function filters(): array
+    {
+        return [
+            'completion' => $this->completionFilters(),
+            'activity' => $this->ticked('activity', self::ACTIVITY),
+            'kinds' => $this->ticked('kinds', Post::WIN_TYPES),
+            'min_points' => $this->threshold('min_points'),
+            'min_days' => $this->threshold('min_days'),
+            'streaking' => $this->boolean('streaking'),
+            'min_streak' => $this->threshold('min_streak'),
+        ];
+    }
+
+    /**
+     * Which column orders the table, and which way.
+     *
+     * Names climb and numbers fall, which is what each is asked for: a list of
+     * people reads alphabetically, and a leaderboard reads from the top.
+     *
+     * @return array{by: string, direction: string}
+     */
+    public function sort(): array
+    {
+        $by = $this->validated('sort') ?? 'name';
+
+        return [
+            'by' => $by,
+            'direction' => $this->validated('direction')
+                ?? ($by === 'name' ? 'asc' : 'desc'),
+        ];
+    }
+
+    /**
+     * Whether anything here is asked of the wins rather than of the people.
+     *
+     * What decides whether every member's days have to be gathered before the
+     * page is cut. Both activity boxes together ask nothing — that is everybody
+     * — so it takes exactly one of them to count.
+     */
+    public function weighsEveryone(): bool
+    {
+        $filters = $this->filters();
+
+        return $filters['completion']['with_reference']
+            || $filters['completion']['complete']
+            || count($filters['activity']) === 1
+            || $filters['kinds'] !== []
+            || $filters['min_points'] !== null
+            || $filters['min_days'] !== null
+            || in_array($this->sort()['by'], ['days', 'points'], true);
+    }
+
+    /**
+     * Whether the table is ordered by one of the win columns, which is the one
+     * thing the days cannot answer — those columns count wins, not days.
+     */
+    public function ranksByKind(): bool
+    {
+        return in_array($this->sort()['by'], Post::WIN_TYPES, true);
+    }
+
+    /**
+     * The boxes ticked out of those on offer, in the order the page offers them.
+     *
+     * A filter is the set that was chosen rather than the order it arrived in,
+     * so a hand-written query string cannot shuffle or repeat its way into a
+     * different answer.
+     *
+     * @param  list<string>  $offered
+     * @return list<string>
+     */
+    protected function ticked(string $key, array $offered): array
+    {
+        $chosen = $this->validated($key) ?? [];
+
+        return array_values(array_filter(
+            $offered,
+            fn (string $option): bool => in_array($option, $chosen, true)
+        ));
+    }
+
+    /**
+     * A floor typed into one of the number boxes, or null where it was left
+     * empty. Zero reads as absent — at least none is not a narrowing.
+     */
+    protected function threshold(string $key): ?int
+    {
+        $value = $this->validated($key);
+
+        return $value === null || (int) $value === 0 ? null : (int) $value;
     }
 
     /**
