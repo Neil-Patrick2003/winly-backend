@@ -66,8 +66,11 @@ class CirclePolicy
     /**
      * Determine whether the user can remove or bar other members.
      *
-     * The owner alone. Turning members on each other is how a group falls
-     * apart, and there is no second rank to delegate it to yet.
+     * Whoever runs the circle, which may be more than one person. Turning
+     * members on each other is how a group falls apart, so it is not something
+     * an ordinary member can do — but a group large enough to need moderating
+     * is one where waiting on a single pair of hands is its own way of falling
+     * apart.
      */
     public function manage(User $user, Circle $circle): bool
     {
@@ -83,19 +86,17 @@ class CirclePolicy
     }
 
     /**
-     * Whether this user made the circle.
+     * Whether this circle answers to this person as one of its owners.
      *
-     * A circle seeded before ownership existed has no owner, and an absent
-     * owner is nobody rather than everybody — otherwise the first person to ask
-     * would inherit it.
-     */
-    /**
-     * Whether this circle answers to this person as its owner.
+     * A circle answers to whoever made it and to anyone they have since made an
+     * owner alongside them. The two are the same rank and this asks one
+     * question of both — there is no ability an owner has that a second owner
+     * does not.
      *
-     * A sub-circle answers to two: whoever runs it, and whoever runs the circle
-     * it sits inside. The outer circle's owner made it and chose who keeps it,
-     * so they outrank that choice — they can rename it, move its members, hand
-     * it to somebody else or close it.
+     * A sub-circle answers further up as well: to whoever runs the circle it
+     * sits inside. The outer circle's owners made it and chose who keeps it, so
+     * they outrank that choice — they can rename it, move its members, hand it
+     * to somebody else or close it.
      *
      * Written here rather than at each ability so that every rule leaning on
      * ownership picks it up at once. One level only, so this is a single hop
@@ -103,13 +104,35 @@ class CirclePolicy
      */
     protected function own(User $user, Circle $circle): bool
     {
-        if ($circle->owner_id !== null && $circle->owner_id === $user->getKey()) {
+        if ($this->runs($user, $circle->owner_id, $circle->getKey())) {
             return true;
         }
 
-        return $circle->parent_id !== null
-            && $circle->parent()->whereKey($circle->parent_id)
+        if ($circle->parent_id === null) {
+            return false;
+        }
+
+        // The rank above is answered off the list already in hand; only the
+        // outer circle's `owner_id` is still worth a query, and it is the one
+        // this asked for before ranks existed.
+        return $user->holdsOwnerRankIn($circle->parent_id)
+            || Circle::query()
+                ->whereKey($circle->parent_id)
                 ->where('owner_id', $user->getKey())
                 ->exists();
+    }
+
+    /**
+     * Whether this person runs one particular circle, leaving any circle it
+     * sits inside out of it.
+     *
+     * A circle seeded before ownership existed has no owner, and an absent
+     * owner is nobody rather than everybody — otherwise the first person to ask
+     * would inherit it.
+     */
+    protected function runs(User $user, ?string $ownerId, string $circleId): bool
+    {
+        return ($ownerId !== null && $ownerId === $user->getKey())
+            || $user->holdsOwnerRankIn($circleId);
     }
 }

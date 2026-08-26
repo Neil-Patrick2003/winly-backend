@@ -6,6 +6,7 @@ use App\Actions\Circles\BlockFromCircle;
 use App\Actions\Circles\CreateCircle;
 use App\Actions\Circles\InviteToCircle;
 use App\Actions\Circles\RemoveCircleMember;
+use App\Actions\Circles\SetCircleMemberRole;
 use App\Http\Requests\Api\V1\StoreCircleRequest;
 use App\Http\Requests\UpdateCircleRequest;
 use App\Models\Circle;
@@ -77,6 +78,15 @@ class CircleManagementController extends Controller
                     'avatar_url' => $membership->user->avatar_url,
                     'joined_at' => $membership->joined_at->toIso8601String(),
                     'is_owner' => $membership->user_id === $circle->owner_id,
+                    /*
+                     * Runs the circle without having made it.
+                     *
+                     * Kept apart from `is_owner` because the two are not the
+                     * same offer: the founder cannot be demoted and does not
+                     * get the control, and somebody given the rank can be.
+                     */
+                    'is_co_owner' => $membership->role === CircleMembership::ROLE_OWNER
+                        && $membership->user_id !== $circle->owner_id,
                 ]),
             /*
              * The circles inside this one.
@@ -220,6 +230,37 @@ class CircleManagementController extends Controller
         $remove->execute($circle, $user);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Member removed.')]);
+
+        return back();
+    }
+
+    /**
+     * Give somebody in the circle the run of it, or take it back.
+     *
+     * The owner's own screen, not staff's: who helps run a group is the group's
+     * business, and unlike handing the circle over it is a decision the person
+     * in charge is still around to make.
+     */
+    public function setMemberRole(
+        Request $request,
+        Circle $circle,
+        User $user,
+        SetCircleMemberRole $setRole,
+    ): RedirectResponse {
+        Gate::authorize('manage', $circle);
+
+        $role = $request->validate([
+            'role' => ['required', 'string', Rule::in(CircleMembership::ROLES)],
+        ])['role'];
+
+        $setRole->execute($circle, $user, $role);
+
+        Inertia::flash('toast', [
+            'type' => 'success',
+            'message' => $role === CircleMembership::ROLE_OWNER
+                ? __('They can now run this circle.')
+                : __('They are an ordinary member again.'),
+        ]);
 
         return back();
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Api\V1;
 
 use App\Models\Circle;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -68,13 +69,22 @@ class CircleResource extends JsonResource
              */
             'posts_count' => $this->whenHas('posts_count', fn (mixed $value): int => (int) $value),
             /*
-             * Whether the reader made it.
+             * Whether the reader runs it.
              *
-             * Derived rather than loaded: the owner id is on the row already,
-             * and the client needs the answer on every circle it draws to know
-             * which ones it may manage.
+             * What the client draws its manage affordances off, so it answers
+             * for a second owner as well as for the founder — the two hold the
+             * same rank, and a screen that offered the controls to only one of
+             * them would be hiding abilities the server grants.
+             *
+             * The owner id is on the row already; the rank behind the second
+             * route is read once per request rather than per circle.
              */
-            'is_owner' => $this->owner_id !== null
+            'is_owner' => $this->runsFor($request->user()),
+            /*
+             * Whether the reader made it, for a screen that wants to tell the
+             * founder apart from whoever helps run it.
+             */
+            'is_founder' => $this->owner_id !== null
                 && $this->owner_id === $request->user()?->getKey(),
             /*
              * Whether the reader is in it. Present only where the caller
@@ -86,5 +96,22 @@ class CircleResource extends JsonResource
             'owner' => new UserSummaryResource($this->whenLoaded('owner')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Whether this person runs the circle.
+     *
+     * The founder, off the column already on the row, or somebody since given
+     * the same run of it — a list the user model reads once and keeps, so a
+     * page of thirty circles asks once rather than thirty times.
+     */
+    protected function runsFor(?User $user): bool
+    {
+        if ($user === null) {
+            return false;
+        }
+
+        return ($this->owner_id !== null && $this->owner_id === $user->getKey())
+            || $user->holdsOwnerRankIn($this->id);
     }
 }

@@ -1,5 +1,14 @@
 import { Form, Head, Link, router, useForm } from '@inertiajs/react';
-import { Ban, Crown, Search, Trash2, UserMinus, UserPlus } from 'lucide-react';
+import {
+    Ban,
+    Crown,
+    Search,
+    ShieldMinus,
+    ShieldPlus,
+    Trash2,
+    UserMinus,
+    UserPlus,
+} from 'lucide-react';
 import { useState } from 'react';
 import CircleManagementController from '@/actions/App/Http/Controllers/CircleManagementController';
 import { CircleBadge } from '@/components/circle-badge';
@@ -597,7 +606,7 @@ export default function Manage({
 
                         <SettingsSection
                             title="Members"
-                            description="Removing takes back this membership. Blocking also stops the next one."
+                            description="A co-owner can do everything you can here. Removing takes back this membership; blocking also stops the next one."
                         >
                             <ul className={listStyles}>
                                 {members.data.map((member) => (
@@ -611,6 +620,88 @@ export default function Manage({
                                                     </Badge>
                                                 ) : (
                                                     <>
+                                                        {/* Marked as well as
+                                                            offered, so a glance
+                                                            down the list says
+                                                            who to go to without
+                                                            reading the
+                                                            controls. */}
+                                                        {member.is_co_owner && (
+                                                            <Badge variant="secondary">
+                                                                Co-owner
+                                                            </Badge>
+                                                        )}
+
+                                                        {/* Giving somebody the
+                                                            run of the circle is
+                                                            the owner's own
+                                                            decision, unlike
+                                                            handing it over
+                                                            below — the person
+                                                            in charge is still
+                                                            around to make it. */}
+                                                        <ConfirmDialog
+                                                            tooltip={
+                                                                member.is_co_owner
+                                                                    ? 'Take back the run of the circle'
+                                                                    : 'Let this member run the circle'
+                                                            }
+                                                            title={
+                                                                member.is_co_owner
+                                                                    ? `Take back ${member.full_name}'s run of ${circle.name}?`
+                                                                    : `Let ${member.full_name} run ${circle.name}?`
+                                                            }
+                                                            description={
+                                                                member.is_co_owner
+                                                                    ? 'They stay a member, but stop being able to rename the circle, invite, remove or block anybody.'
+                                                                    : `They will be able to do everything you can here — rename the circle, invite, remove and block members, and delete it. ${
+                                                                          circle.owner
+                                                                              ? `${circle.owner.full_name} stays the owner and keeps all of it.`
+                                                                              : 'The circle stays without an owner of record.'
+                                                                      }`
+                                                            }
+                                                            confirmLabel={
+                                                                member.is_co_owner
+                                                                    ? 'Take it back'
+                                                                    : 'Let them run it'
+                                                            }
+                                                            onConfirm={() =>
+                                                                router.patch(
+                                                                    CircleManagementController.setMemberRole.url(
+                                                                        scoped(
+                                                                            member.id,
+                                                                        ),
+                                                                    ),
+                                                                    {
+                                                                        role: member.is_co_owner
+                                                                            ? 'member'
+                                                                            : 'owner',
+                                                                    },
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                )
+                                                            }
+                                                            trigger={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    {member.is_co_owner ? (
+                                                                        <ShieldMinus className="size-4" />
+                                                                    ) : (
+                                                                        <ShieldPlus className="size-4" />
+                                                                    )}
+                                                                    <span className="sr-only">
+                                                                        {member.is_co_owner
+                                                                            ? `Take back ${member.full_name}'s run of the circle`
+                                                                            : `Let ${member.full_name} run the circle`}
+                                                                    </span>
+                                                                </Button>
+                                                            }
+                                                        />
+
                                                         {circle.can_transfer_ownership && (
                                                             <ConfirmDialog
                                                                 tooltip="Make this member the owner"
