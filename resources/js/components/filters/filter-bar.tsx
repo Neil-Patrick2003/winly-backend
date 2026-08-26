@@ -16,6 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 export type ActiveFilter = {
     /** Stable key, used for React and for the clear button label. */
@@ -117,42 +118,68 @@ export default function FilterBar({
                 </div>
             </CollapsibleContent>
 
-            {activeFilters.length > 0 && (
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-                    <span className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
-                        Filtered by
-                    </span>
-
-                    {activeFilters.map((filter) => (
-                        <button
-                            key={filter.key}
-                            type="button"
-                            onClick={filter.onClear}
-                            className="group inline-flex items-center gap-1.5 rounded-sm border border-border bg-secondary py-0.5 pr-1.5 pl-2 text-[12px] transition-colors hover:border-destructive/40 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        >
-                            <span className="text-muted-foreground group-hover:text-destructive">
-                                {filter.label}
-                            </span>
-                            <span className="font-medium">{filter.value}</span>
-                            <X className="size-3" />
-                            <span className="sr-only">
-                                Clear {filter.label} filter
-                            </span>
-                        </button>
-                    ))}
-
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={onReset}
-                        data-test="clear-filters"
-                        className="h-6 px-2 text-[12px] text-muted-foreground"
-                    >
-                        Clear all
-                    </Button>
-                </div>
-            )}
+            <ActiveFilterChips
+                filters={activeFilters}
+                onReset={onReset}
+                className="mt-3 border-t border-border pt-3"
+            />
         </Collapsible>
+    );
+}
+
+/**
+ * What is applied, echoed back so a narrowed list never looks like an empty
+ * one. Each chip clears the one filter it names, and the last button clears
+ * the lot — nobody should have to remember which control they touched.
+ *
+ * Renders nothing where nothing is applied, so a caller can place it
+ * unconditionally.
+ */
+export function ActiveFilterChips({
+    filters,
+    onReset,
+    className,
+}: {
+    filters: ActiveFilter[];
+    onReset: () => void;
+    className?: string;
+}) {
+    if (filters.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+            <span className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">
+                Filtered by
+            </span>
+
+            {filters.map((filter) => (
+                <button
+                    key={filter.key}
+                    type="button"
+                    onClick={filter.onClear}
+                    className="group inline-flex items-center gap-1.5 rounded-sm border border-border bg-secondary py-0.5 pr-1.5 pl-2 text-[12px] transition-colors hover:border-destructive/40 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                    <span className="text-muted-foreground group-hover:text-destructive">
+                        {filter.label}
+                    </span>
+                    <span className="font-medium">{filter.value}</span>
+                    <X className="size-3" />
+                    <span className="sr-only">Clear {filter.label} filter</span>
+                </button>
+            ))}
+
+            <Button
+                variant="ghost"
+                size="sm"
+                onClick={onReset}
+                data-test="clear-filters"
+                className="h-6 px-2 text-[12px] text-muted-foreground"
+            >
+                Clear all
+            </Button>
+        </div>
     );
 }
 

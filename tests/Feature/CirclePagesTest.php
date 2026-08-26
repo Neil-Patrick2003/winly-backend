@@ -460,6 +460,629 @@ test('the search travels with the range and the circles counted', function () {
         );
 });
 
+/**
+ * Share a learning win, saying whether it cites a source.
+ */
+function shareLearning(Circle $circle, User $user, CarbonInterface $on, bool $cited): void
+{
+    $post = postInCircle($circle, $user, ['created_at' => $on]);
+
+    $factory = $cited ? WinLearning::factory() : WinLearning::factory()->withoutSource();
+
+    $factory->create(['post_id' => $post->id, 'completed_at' => $on]);
+}
+
+/**
+ * Log all three kinds on each of the last N days — a complete run over a range
+ * ending today.
+ */
+function completeRun(Circle $circle, User $user, int $days, bool $cited = true): void
+{
+    foreach (range(0, $days - 1) as $back) {
+        $on = today()->subDays($back);
+
+        shareWin($circle, $user, 'meditation', $on);
+        shareWin($circle, $user, 'movement', $on);
+        shareLearning($circle, $user, $on, $cited);
+    }
+}
+
+/**
+ * The tracker over the last three days, with whatever boxes are ticked.
+ *
+ * @param  array<string, mixed>  $filters
+ */
+function trackerOverThreeDays(Circle $circle, array $filters = []): array
+{
+    return [
+        'circle' => $circle,
+        'from' => today()->subDays(2)->toDateString(),
+        'to' => today()->toDateString(),
+        ...$filters,
+    ];
+}
+
+test('the cited award lists only the members who sourced every learning', function () {
+    completeRun($this->circle, $this->member, 3);
+    completeRun($this->circle, $this->owner, 3, cited: false);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('days', 3)
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('filters.completion.with_reference', true)
+            ->where('filters.completion.complete', false)
+            ->where('filters.completion.exclude_referenced', false)
+        );
+});
+
+test('one unsourced learning costs the cited award but not the plain one', function () {
+    completeRun($this->circle, $this->member, 3);
+
+    // A fourth learning, on a day already covered, with nothing cited.
+    shareLearning($this->circle, $this->member, today(), false);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 1));
+});
+
+test('a reference submitted blank is no reference at all', function () {
+    completeRun($this->circle, $this->member, 3);
+
+    WinLearning::query()->update(['reference_source' => '']);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('the plain award lists everybody who finished, cited or not', function () {
+    completeRun($this->circle, $this->member, 3);
+    completeRun($this->circle, $this->owner, 3, cited: false);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 2)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('members.data.1.full_name', 'Bea Member')
+        );
+});
+
+test('excluding the cited leaves the plain award to those who did not cite', function () {
+    completeRun($this->circle, $this->member, 3);
+    completeRun($this->circle, $this->owner, 3, cited: false);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+            'exclude_referenced' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('filters.completion.exclude_referenced', true)
+        );
+});
+
+test('both boxes ticked list each finisher once, under whichever award is theirs', function () {
+    completeRun($this->circle, $this->member, 3);
+    completeRun($this->circle, $this->owner, 3, cited: false);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+            'complete' => 1,
+            'exclude_referenced' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 2));
+});
+
+test('exclusion is ignored where the plain award was not asked for', function () {
+    completeRun($this->circle, $this->member, 3);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+            'exclude_referenced' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('filters.completion.exclude_referenced', false)
+        );
+});
+
+test('a missed day breaks a complete run', function () {
+    completeRun($this->circle, $this->member, 2);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('a kind never logged breaks a complete run, however much of the rest there is', function () {
+    foreach (range(0, 2) as $back) {
+        $on = today()->subDays($back);
+
+        shareWin($this->circle, $this->member, 'meditation', $on);
+        shareLearning($this->circle, $this->member, $on, true);
+    }
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('a second win the same day cannot stand in for a day nobody logged', function () {
+    foreach ([today(), today()->subDay()] as $on) {
+        shareWin($this->circle, $this->member, 'meditation', $on);
+        shareWin($this->circle, $this->member, 'movement', $on);
+        shareLearning($this->circle, $this->member, $on, true);
+    }
+
+    // Two more sittings today, which the points column would not pay for
+    // either — the run is still a day short.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('no boxes ticked lists everybody, as the tab always did', function () {
+    completeRun($this->circle, $this->member, 3);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle)))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 2)
+            ->where('filters.completion.with_reference', false)
+            ->where('filters.completion.complete', false)
+        );
+});
+
+test('an award nobody won empties the list rather than ignoring itself', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('the award only counts wins shared into the circles being counted', function () {
+    $elsewhere = Circle::factory()->create(['owner_id' => $this->owner->id]);
+
+    completeRun($elsewhere, $this->member, 3);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('the award travels with the search', function () {
+    completeRun($this->circle, $this->member, 3);
+    completeRun($this->circle, $this->owner, 3);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'complete_with_reference' => 1,
+            'search' => 'ada',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('search', 'ada')
+        );
+});
+
+test('the active filter leaves out anybody who logged nothing in the range', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('filters.activity', ['active'])
+        );
+});
+
+test('the inactive filter lists exactly the people the active one leaves out', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['inactive'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('members.data.0.total_points', 0)
+        );
+});
+
+test('a win outside the range does not make somebody active in it', function () {
+    shareWin($this->circle, $this->member, 'meditation', today()->subDays(10));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 0));
+});
+
+test('both activity boxes are everybody, which is what neither of them says', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active', 'inactive'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 2));
+});
+
+test('the kind filter lists whoever logged that kind', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareLearning($this->circle, $this->owner, today(), true);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'kinds' => ['learning'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('filters.kinds', ['learning'])
+        );
+});
+
+test('two kinds ticked asks for both, not either', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareLearning($this->circle, $this->member, today(), true);
+
+    // The owner has one of the two, which is not both.
+    shareWin($this->circle, $this->owner, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'kinds' => ['meditation', 'learning'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+        );
+});
+
+test('the points floor keeps whoever reached it', function () {
+    // Three kinds on one day is three points; one kind on one day is one.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+    shareLearning($this->circle, $this->member, today(), true);
+    shareWin($this->circle, $this->owner, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'min_points' => 3,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('members.data.0.total_points', 3)
+            ->where('filters.min_points', 3)
+        );
+});
+
+test('a floor of zero is no floor at all', function () {
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'min_points' => 0,
+            'min_days' => 0,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 2)
+            ->where('filters.min_points', null)
+            ->where('filters.min_days', null)
+        );
+});
+
+test('the days floor counts days turned up, not wins filed', function () {
+    // Three wins, all on one day — one day of showing up.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+    shareLearning($this->circle, $this->member, today(), true);
+
+    // Two wins on two days.
+    shareWin($this->circle, $this->owner, 'meditation', today());
+    shareWin($this->circle, $this->owner, 'meditation', today()->subDay());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'min_days' => 2,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+        );
+});
+
+test('the streak filter goes by the run still standing, not the stored column', function () {
+    // A run that ended a fortnight ago keeps its number in the column, and the
+    // tab has always shown it as lapsed. The filter has to agree.
+    $this->member->forceFill([
+        'streak_days' => 9,
+        'last_win_on' => today()->subDays(14),
+    ])->save();
+    $this->owner->forceFill([
+        'streak_days' => 4,
+        'last_win_on' => today(),
+    ])->save();
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'streaking' => 1,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('members.data.0.streak_days', 4)
+        );
+});
+
+test('the streak floor keeps only the long runs', function () {
+    $this->member->forceFill(['streak_days' => 9, 'last_win_on' => today()])->save();
+    $this->owner->forceFill(['streak_days' => 4, 'last_win_on' => today()])->save();
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'min_streak' => 7,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('filters.min_streak', 7)
+        );
+});
+
+test('the filters narrow together rather than one at a time', function () {
+    // Active, but only one point and no learning.
+    shareWin($this->circle, $this->owner, 'meditation', today());
+
+    // Active, three points, learning included.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+    shareLearning($this->circle, $this->member, today(), true);
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active'],
+            'kinds' => ['learning'],
+            'min_points' => 3,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 1)
+            ->where('members.data.0.full_name', 'Bea Member')
+        );
+});
+
+test('the table sorts by points, highest first', function () {
+    shareWin($this->circle, $this->owner, 'meditation', today());
+
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'points',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            // Bea has two points to Ada's one, so she leads a list that reads
+            // alphabetically the other way round.
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('members.data.1.full_name', 'Ada Owner')
+            ->where('sort.by', 'points')
+            ->where('sort.direction', 'desc')
+        );
+});
+
+test('a number column climbs where the reader asks it to', function () {
+    shareWin($this->circle, $this->owner, 'meditation', today());
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'movement', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'points',
+            'direction' => 'asc',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('members.data.1.full_name', 'Bea Member')
+        );
+});
+
+test('a win column sorts on wins filed rather than days turned up', function () {
+    // Two sittings on one day beats one sitting on each of two days, which the
+    // days column would have the other way round.
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'meditation', today());
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    shareWin($this->circle, $this->owner, 'meditation', today());
+    shareWin($this->circle, $this->owner, 'meditation', today()->subDay());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'meditation',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('members.data.0.wins.meditation', 3)
+            ->where('members.data.1.wins.meditation', 2)
+        );
+});
+
+test('the table sorts by the streak still standing', function () {
+    $this->member->forceFill(['streak_days' => 2, 'last_win_on' => today()])->save();
+    $this->owner->forceFill(['streak_days' => 30, 'last_win_on' => today()->subDays(14)])->save();
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'streak',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            // Ada's thirty lapsed a fortnight ago, so it is worth nothing here.
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('members.data.1.full_name', 'Ada Owner')
+        );
+});
+
+test('names run backwards where the member column is turned around', function () {
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'name',
+            'direction' => 'desc',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.0.full_name', 'Bea Member')
+            ->where('members.data.1.full_name', 'Ada Owner')
+        );
+});
+
+test('people level on a number stay in name order', function () {
+    // Neither has logged anything, so both are on nought.
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'sort' => 'points',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('members.data.0.full_name', 'Ada Owner')
+            ->where('members.data.1.full_name', 'Bea Member')
+        );
+});
+
+test('an order the tracker does not offer is turned away', function () {
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', ['circle' => $this->circle, 'sort' => 'salary']))
+        ->assertSessionHasErrors('sort');
+});
+
+test('the filters travel with the range, the circles and the search', function () {
+    shareWin($this->circle, $this->member, 'meditation', today());
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'search' => 'bea',
+            'activity' => ['active'],
+            'sort' => 'points',
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('days', 3)
+            ->where('search', 'bea')
+            ->where('filters.activity', ['active'])
+            ->where('sort.by', 'points')
+            ->has('members.data', 1)
+        );
+});
+
+test('a filtered list pages on what survived the filter', function () {
+    // Twenty-two members, of whom only the twenty-one actives are listed.
+    $actives = User::factory()->count(21)->create();
+
+    foreach ($actives as $index => $active) {
+        CircleMembership::create([
+            'user_id' => $active->id,
+            'circle_id' => $this->circle->id,
+            'joined_at' => now(),
+        ]);
+
+        shareWin($this->circle, $active, 'meditation', today());
+    }
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active'],
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->has('members.data', 20)
+            ->where('members.total', 21)
+            ->where('members.last_page', 2)
+        );
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', trackerOverThreeDays($this->circle, [
+            'activity' => ['active'],
+            'page' => 2,
+        ])))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->has('members.data', 1));
+});
+
 test('the tracker runs the same queries however many members there are', function () {
     $measure = function (): int {
         DB::flushQueryLog();
@@ -487,6 +1110,54 @@ test('the tracker runs the same queries however many members there are', functio
             'joined_at' => now(),
         ]);
         shareWin($this->circle, $extra, 'movement', today());
+    }
+
+    expect($measure())->toBe($few);
+});
+
+test('a filtered and sorted tracker runs the same queries however many members there are', function () {
+    // The whole circle is weighed before the page is cut, which is what makes
+    // the filters and the order mean the same thing on page two as on page
+    // one. It has to stay a fixed number of queries all the same.
+    $filtered = trackerOverThreeDays($this->circle, [
+        'activity' => ['active'],
+        'kinds' => ['meditation'],
+        'min_points' => 1,
+        'complete' => 1,
+        'sort' => 'meditation',
+    ]);
+
+    $measure = function () use ($filtered): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->actingAs($this->member)
+            ->get(route('circles.tracker', $filtered))
+            ->assertOk();
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $count;
+    };
+
+    // Somebody has to survive the filter for the baseline to be measured on
+    // the same footing: the avatars on a page are loaded in one go, and a page
+    // with nobody on it never asks for them.
+    completeRun($this->circle, $this->member, 3);
+
+    // Measured once and discarded, for the reason given in CircleIndexTest:
+    // the reader's photo lands on the instance this test holds during the
+    // first render, and the baseline has to be taken on the same footing.
+    $measure();
+
+    $few = $measure();
+
+    foreach (User::factory()->count(6)->create() as $extra) {
+        CircleMembership::create([
+            'user_id' => $extra->id,
+            'circle_id' => $this->circle->id,
+            'joined_at' => now(),
+        ]);
+        completeRun($this->circle, $extra, 3);
     }
 
     expect($measure())->toBe($few);
