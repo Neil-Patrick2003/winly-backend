@@ -755,209 +755,232 @@ export default function Tracker({
                                         </Button>
                                     </PopoverTrigger>
 
+                                    {/* The panel is taller than most screens
+                                        once every group is in it, so the
+                                        groups scroll and the clear button
+                                        stays put — a control that has to be
+                                        scrolled to is one somebody stops
+                                        reaching for. Capped on the room Radix
+                                        measured between the trigger and the
+                                        edge of the window rather than on a
+                                        share of the viewport, so a panel
+                                        opened from a button near the bottom
+                                        of the page still ends on screen. */}
                                     <PopoverContent
                                         align="end"
-                                        className="grid max-h-[70vh] w-80 gap-4 overflow-y-auto"
+                                        className="flex max-h-(--radix-popover-content-available-height) w-80 flex-col p-0"
                                     >
-                                        <FilterGroup
-                                            title="Awards"
-                                            hint="Finishing means all three kinds logged on every day of the range."
-                                        >
-                                            <FilterCheckbox
-                                                id="award-cited"
-                                                checked={
-                                                    filters.completion
-                                                        .with_reference
-                                                }
-                                                onToggle={() =>
-                                                    toggleAward(
-                                                        'with_reference',
-                                                    )
-                                                }
+                                        <div className="grid gap-4 overflow-y-auto p-4">
+                                            <FilterGroup
+                                                title="Awards"
+                                                hint="Finishing means all three kinds logged on every day of the range."
                                             >
-                                                Complete with learning reference
-                                            </FilterCheckbox>
-
-                                            <FilterCheckbox
-                                                id="award-complete"
-                                                checked={
-                                                    filters.completion.complete
-                                                }
-                                                onToggle={() =>
-                                                    toggleAward('complete')
-                                                }
-                                            >
-                                                Complete
-                                            </FilterCheckbox>
-
-                                            {/* Indented and disabled until the
-                                                box it qualifies is ticked, so
-                                                it reads as part of that award
-                                                rather than a third one. */}
-                                            <div className="pl-6">
                                                 <FilterCheckbox
-                                                    id="award-exclude-cited"
-                                                    disabled={
-                                                        !filters.completion
-                                                            .complete
-                                                    }
+                                                    id="award-cited"
                                                     checked={
                                                         filters.completion
-                                                            .exclude_referenced
+                                                            .with_reference
                                                     }
                                                     onToggle={() =>
                                                         toggleAward(
-                                                            'exclude_referenced',
+                                                            'with_reference',
                                                         )
                                                     }
                                                 >
-                                                    Exclude those with a
+                                                    Complete with learning
                                                     reference
                                                 </FilterCheckbox>
-                                            </div>
-                                        </FilterGroup>
 
-                                        <Separator />
-
-                                        <FilterGroup
-                                            title="Activity"
-                                            hint="Both is everybody, which is what neither already says."
-                                        >
-                                            {(
-                                                [
-                                                    ['active', 'Active'],
-                                                    [
-                                                        'inactive',
-                                                        'Nothing logged',
-                                                    ],
-                                                ] as [Activity, string][]
-                                            ).map(([value, label]) => (
                                                 <FilterCheckbox
-                                                    key={value}
-                                                    id={`activity-${value}`}
-                                                    checked={filters.activity.includes(
-                                                        value,
-                                                    )}
+                                                    id="award-complete"
+                                                    checked={
+                                                        filters.completion
+                                                            .complete
+                                                    }
                                                     onToggle={() =>
-                                                        narrow({
-                                                            activity: toggleIn(
-                                                                filters.activity,
-                                                                value,
-                                                            ),
-                                                        })
+                                                        toggleAward('complete')
                                                     }
                                                 >
-                                                    {label}
+                                                    Complete
                                                 </FilterCheckbox>
-                                            ))}
-                                        </FilterGroup>
 
-                                        <Separator />
-
-                                        <FilterGroup
-                                            title="Kinds logged"
-                                            hint="Ticking two asks for people doing both, not either."
-                                        >
-                                            {winTypes.map((type) => {
-                                                const {
-                                                    label,
-                                                    icon: Icon,
-                                                    ink,
-                                                } = winTypeMeta[type];
-
-                                                return (
+                                                {/* Indented and disabled until the
+                                                box it qualifies is ticked, so
+                                                it reads as part of that award
+                                                rather than a third one. */}
+                                                <div className="pl-6">
                                                     <FilterCheckbox
-                                                        key={type}
-                                                        id={`kind-${type}`}
-                                                        checked={filters.kinds.includes(
-                                                            type,
+                                                        id="award-exclude-cited"
+                                                        disabled={
+                                                            !filters.completion
+                                                                .complete
+                                                        }
+                                                        checked={
+                                                            filters.completion
+                                                                .exclude_referenced
+                                                        }
+                                                        onToggle={() =>
+                                                            toggleAward(
+                                                                'exclude_referenced',
+                                                            )
+                                                        }
+                                                    >
+                                                        Exclude those with a
+                                                        reference
+                                                    </FilterCheckbox>
+                                                </div>
+                                            </FilterGroup>
+
+                                            <Separator />
+
+                                            <FilterGroup
+                                                title="Activity"
+                                                hint="Both is everybody, which is what neither already says."
+                                            >
+                                                {(
+                                                    [
+                                                        ['active', 'Active'],
+                                                        [
+                                                            'inactive',
+                                                            'Nothing logged',
+                                                        ],
+                                                    ] as [Activity, string][]
+                                                ).map(([value, label]) => (
+                                                    <FilterCheckbox
+                                                        key={value}
+                                                        id={`activity-${value}`}
+                                                        checked={filters.activity.includes(
+                                                            value,
                                                         )}
                                                         onToggle={() =>
                                                             narrow({
-                                                                kinds: toggleIn(
-                                                                    filters.kinds,
-                                                                    type,
-                                                                ),
+                                                                activity:
+                                                                    toggleIn(
+                                                                        filters.activity,
+                                                                        value,
+                                                                    ),
                                                             })
                                                         }
                                                     >
-                                                        <span className="flex items-center gap-1.5">
-                                                            <Icon
-                                                                className={cn(
-                                                                    'size-3.5',
-                                                                    ink,
-                                                                )}
-                                                                aria-hidden
-                                                            />
-                                                            {label}
-                                                        </span>
+                                                        {label}
                                                     </FilterCheckbox>
-                                                );
-                                            })}
-                                        </FilterGroup>
+                                                ))}
+                                            </FilterGroup>
 
-                                        <Separator />
+                                            <Separator />
 
-                                        <FilterGroup title="At least">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <NumberFilter
-                                                    id="min-points"
-                                                    label="Points"
-                                                    value={filters.min_points}
-                                                    onCommit={(min_points) =>
-                                                        narrow({ min_points })
-                                                    }
-                                                />
-                                                <NumberFilter
-                                                    id="min-days"
-                                                    label="Total days"
-                                                    value={filters.min_days}
-                                                    onCommit={(min_days) =>
-                                                        narrow({ min_days })
-                                                    }
-                                                />
-                                            </div>
-                                        </FilterGroup>
-
-                                        <Separator />
-
-                                        <FilterGroup title="Streak">
-                                            <FilterCheckbox
-                                                id="streaking"
-                                                checked={filters.streaking}
-                                                onToggle={() =>
-                                                    narrow({
-                                                        streaking:
-                                                            !filters.streaking,
-                                                    })
-                                                }
+                                            <FilterGroup
+                                                title="Kinds logged"
+                                                hint="Ticking two asks for people doing both, not either."
                                             >
-                                                Still running today
-                                            </FilterCheckbox>
+                                                {winTypes.map((type) => {
+                                                    const {
+                                                        label,
+                                                        icon: Icon,
+                                                        ink,
+                                                    } = winTypeMeta[type];
 
-                                            <NumberFilter
-                                                id="min-streak"
-                                                label="Days in a row, at least"
-                                                value={filters.min_streak}
-                                                onCommit={(min_streak) =>
-                                                    narrow({ min_streak })
-                                                }
-                                            />
-                                        </FilterGroup>
+                                                    return (
+                                                        <FilterCheckbox
+                                                            key={type}
+                                                            id={`kind-${type}`}
+                                                            checked={filters.kinds.includes(
+                                                                type,
+                                                            )}
+                                                            onToggle={() =>
+                                                                narrow({
+                                                                    kinds: toggleIn(
+                                                                        filters.kinds,
+                                                                        type,
+                                                                    ),
+                                                                })
+                                                            }
+                                                        >
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Icon
+                                                                    className={cn(
+                                                                        'size-3.5',
+                                                                        ink,
+                                                                    )}
+                                                                    aria-hidden
+                                                                />
+                                                                {label}
+                                                            </span>
+                                                        </FilterCheckbox>
+                                                    );
+                                                })}
+                                            </FilterGroup>
 
-                                        <Separator />
+                                            <Separator />
 
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={chips.length === 0}
-                                            onClick={() => {
-                                                clearFilters();
-                                                setPanelOpen(false);
-                                            }}
-                                        >
-                                            Clear all filters
-                                        </Button>
+                                            <FilterGroup title="At least">
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <NumberFilter
+                                                        id="min-points"
+                                                        label="Points"
+                                                        value={
+                                                            filters.min_points
+                                                        }
+                                                        onCommit={(
+                                                            min_points,
+                                                        ) =>
+                                                            narrow({
+                                                                min_points,
+                                                            })
+                                                        }
+                                                    />
+                                                    <NumberFilter
+                                                        id="min-days"
+                                                        label="Total days"
+                                                        value={filters.min_days}
+                                                        onCommit={(min_days) =>
+                                                            narrow({ min_days })
+                                                        }
+                                                    />
+                                                </div>
+                                            </FilterGroup>
+
+                                            <Separator />
+
+                                            <FilterGroup title="Streak">
+                                                <FilterCheckbox
+                                                    id="streaking"
+                                                    checked={filters.streaking}
+                                                    onToggle={() =>
+                                                        narrow({
+                                                            streaking:
+                                                                !filters.streaking,
+                                                        })
+                                                    }
+                                                >
+                                                    Still running today
+                                                </FilterCheckbox>
+
+                                                <NumberFilter
+                                                    id="min-streak"
+                                                    label="Days in a row, at least"
+                                                    value={filters.min_streak}
+                                                    onCommit={(min_streak) =>
+                                                        narrow({ min_streak })
+                                                    }
+                                                />
+                                            </FilterGroup>
+                                        </div>
+
+                                        <div className="border-t border-border p-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="w-full"
+                                                disabled={chips.length === 0}
+                                                onClick={() => {
+                                                    clearFilters();
+                                                    setPanelOpen(false);
+                                                }}
+                                            >
+                                                Clear all filters
+                                            </Button>
+                                        </div>
                                     </PopoverContent>
                                 </Popover>
                             </div>
