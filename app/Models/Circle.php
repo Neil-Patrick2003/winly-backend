@@ -130,6 +130,20 @@ class Circle extends Model
     }
 
     /**
+     * The memberships that run this circle.
+     *
+     * The one who made it is among them: their membership carries the rank
+     * too, so "who runs this" is one question with one answer rather than a
+     * column and a table that have to agree.
+     *
+     * @return HasMany<CircleMembership, $this>
+     */
+    public function ownerships(): HasMany
+    {
+        return $this->memberships()->where('role', CircleMembership::ROLE_OWNER);
+    }
+
+    /**
      * The invitations sent for this circle, answered or not.
      *
      * @return HasMany<CircleInvitation, $this>
@@ -179,6 +193,29 @@ class Circle extends Model
                     ->orWhere('tag', 'like', $term)
                     ->orWhere('description', 'like', $term);
             });
+        });
+    }
+
+    /**
+     * Narrow to the circles this person runs.
+     *
+     * Both routes to it: the `owner_id` column, which names whoever made the
+     * circle, and the owner rank on a membership, which is how somebody else is
+     * given the same run of the place. The column is kept in the test rather
+     * than leaned on entirely — an owner whose membership row went missing
+     * still owns their circle, and a rule that forgot that would lock them out
+     * of it.
+     *
+     * @param  Builder<Circle>  $query
+     */
+    #[Scope]
+    protected function runBy(Builder $query, User $owner): void
+    {
+        $query->where(function (Builder $runs) use ($owner): void {
+            $runs
+                ->where('circles.owner_id', $owner->getKey())
+                ->orWhereHas('ownerships', fn (Builder $rank) => $rank
+                    ->where('user_id', $owner->getKey()));
         });
     }
 

@@ -4,7 +4,11 @@ import { EmptyState } from '@/components/empty-state';
 import { Pagination } from '@/components/pagination';
 import { PersonRow } from '@/components/person-row';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import CircleLayout from '@/layouts/circle/circle-layout';
 import type { CircleHeader, CircleMemberRow, Paginated } from '@/types';
 
@@ -48,10 +52,14 @@ export default function Members({
                                         meta={
                                             <span className="flex flex-wrap items-center gap-x-2">
                                                 {member.username && (
-                                                    <span>@{member.username}</span>
+                                                    <span>
+                                                        @{member.username}
+                                                    </span>
                                                 )}
                                                 <span aria-hidden>·</span>
-                                                <span>{joinedOn(member.joined_at)}</span>
+                                                <span>
+                                                    {joinedOn(member.joined_at)}
+                                                </span>
                                             </span>
                                         }
                                         action={
@@ -59,6 +67,16 @@ export default function Members({
                                                 {member.is_owner && (
                                                     <Badge variant="secondary">
                                                         Owner
+                                                    </Badge>
+                                                )}
+
+                                                {/* Same rank, said differently:
+                                                    the group needs to know who
+                                                    to go to, and the founder is
+                                                    worth naming apart. */}
+                                                {member.is_co_owner && (
+                                                    <Badge variant="secondary">
+                                                        Co-owner
                                                     </Badge>
                                                 )}
 
@@ -70,12 +88,14 @@ export default function Members({
                                                                     className="size-3.5 text-orange-500"
                                                                     aria-hidden
                                                                 />
-                                                                {member.streak_days}
+                                                                {
+                                                                    member.streak_days
+                                                                }
                                                             </span>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            {member.streak_days} day
-                                                            streak
+                                                            {member.streak_days}{' '}
+                                                            day streak
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 )}
@@ -83,12 +103,13 @@ export default function Members({
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
                                                         <span className="w-16 text-right text-caption text-muted-foreground tabular-nums">
-                                                            {member.wins_count} wins
+                                                            {member.wins_count}{' '}
+                                                            wins
                                                         </span>
                                                     </TooltipTrigger>
                                                     <TooltipContent>
-                                                        {member.wins_count} wins shared
-                                                        all told
+                                                        {member.wins_count} wins
+                                                        shared all told
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </>
