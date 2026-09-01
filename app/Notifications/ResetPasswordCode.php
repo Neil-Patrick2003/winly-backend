@@ -3,56 +3,39 @@
 namespace App\Notifications;
 
 use App\Actions\SendPasswordResetCode;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Throwable;
 
 /**
  * The email carrying a one-time code for resetting a password from the app.
  *
- * Queued, so the request that asks for a code returns as soon as the row is
- * written rather than holding the connection open for an SMTP conversation.
- * That handoff is the slowest thing in the endpoint and it is not something
- * the caller can act on: the response says the same words whether or not an
- * account exists, so there is nothing in the mail result worth waiting for.
+ * Sent inside the request rather than queued. It was queued when the mail went
+ * out over SMTP, where the handoff was a multi-step conversation on a socket
+ * and easily the slowest thing in the endpoint. Over Brevo's HTTP API it is a
+ * single request measured in a few hundred milliseconds, which is not worth
+ * deferring — and deferring it cost more than it saved:
  *
- * The cost is an operational one, and it is real: `QUEUE_CONNECTION=database`,
- * so nothing is delivered unless a worker is running. Without one the codes
- * pile up in `jobs` and every reset silently fails — see `failed()` for what
- * happens when a send is attempted and does not get through.
+ *   - nothing was delivered unless a queue worker happened to be running, and
+ *     when none was, codes piled up in `jobs` and every reset failed in silence
+ *   - a refusal surfaced minutes later in another process, so clearing the
+ *     stored row had to be done from a `failed()` hook rather than at the point
+ *     that wrote it
+ *
+ * Both of those go away here. `SendPasswordResetCode` writes the row, sends,
+ * and clears the row itself if the send does not get through.
+ *
+ * The price is that the request now waits for Brevo, and a refusal reaches the
+ * caller as an error rather than being swallowed — see the action for what that
+ * means for an endpoint that otherwise answers identically for every address.
  */
-class ResetPasswordCode extends Notification implements ShouldQueue
+class ResetPasswordCode extends Notification
 {
-    use Queueable;
-
-    /**
-     * A refused relay is usually a moment's trouble rather than a permanent
-     * one, so a code gets three goes before it is given up on.
-     */
-    public int $tries = 3;
-
-    /**
-     * Seconds to wait between those goes.
-     *
-     * Deliberately short. The code is good for fifteen minutes and the person
-     * is watching their inbox, so a backoff measured in minutes would exhaust
-     * the window rather than survive it.
-     */
-    public array $backoff = [10, 30];
-
     /**
      * Readable rather than private so tests can assert against the code that
      * was actually sent instead of scraping it back out of the rendered mail.
-     *
-     * The address rides along because `failed()` is handed nothing but the
-     * exception — the notifiable is not passed back — and clearing the stored
-     * row is the whole point of knowing the send did not work.
      */
     public function __construct(
         public readonly string $code,
-        public readonly string $email,
     ) {}
 
     /**
@@ -85,20 +68,5 @@ class ResetPasswordCode extends Notification implements ShouldQueue
                 'minutes' => SendPasswordResetCode::EXPIRES_MINUTES,
                 'appName' => $appName,
             ]);
-    }
-
-    /**
-     * Clear the stored code once the send has been given up on.
-     *
-     * Sending used to happen inside the request, so a failure could be caught
-     * where the row had just been written. Off the queue that failure lands
-     * here instead, minutes later and in another process — and it still has to
-     * clear the row. Left behind, it marks the address as having been written
-     * to moments ago, the retry is silently swallowed by the throttle, and the
-     * person waits for a second mail that was never going to come either.
-     */
-    public function failed(Throwable $failure): void
-    {
-        app(SendPasswordResetCode::class)->discard($this->email, $this->code);
     }
 }
