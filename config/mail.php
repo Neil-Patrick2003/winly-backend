@@ -29,7 +29,7 @@ return [
     | when delivering an email. You may specify which one you're using for
     | your mailers below. You may also add additional mailers if needed.
     |
-    | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
+    | Supported: "brevo", "smtp", "sendmail", "mailgun", "ses", "ses-v2",
     |            "postmark", "resend", "log", "array",
     |            "failover", "roundrobin"
     |
@@ -37,6 +37,25 @@ return [
 
     'mailers' => [
 
+        /*
+         * Brevo over its HTTP API. Not a driver Laravel ships — it is
+         * registered by `AppServiceProvider::configureMail()` and implemented
+         * by `App\Support\BrevoApiTransport`.
+         *
+         * The key lives in `services.brevo` with the other third-party
+         * credentials; it is repeated here only so a second Brevo mailer could
+         * be pointed at a different account without touching the transport.
+         */
+        'brevo' => [
+            'transport' => 'brevo',
+            'key' => env('BREVO_API_KEY'),
+        ],
+
+        /*
+         * The same Brevo account over its SMTP relay, kept as a way back if
+         * the API is unreachable. MAIL_HOST and the credentials below are the
+         * relay's, and are unrelated to BREVO_API_KEY above.
+         */
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),
