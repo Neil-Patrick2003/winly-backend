@@ -85,6 +85,11 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::get('progress/week', [ProgressController::class, 'week'])
             ->name('progress.week');
 
+        // The same shape over an arbitrary window, for systems that mirror the
+        // record and need to reach a day the current week no longer covers.
+        Route::get('progress/range', [ProgressController::class, 'range'])
+            ->name('progress.range');
+
         Route::get('discover', [DiscoverController::class, 'index'])
             ->name('discover');
 
