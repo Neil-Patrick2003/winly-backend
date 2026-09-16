@@ -13,9 +13,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class ProgressController extends Controller
 {
+    /** The longest window `range` will answer for, in days. */
+    private const MAX_RANGE_DAYS = 366;
+
     /**
      * The week so far, a day at a time.
      *
@@ -33,8 +37,6 @@ class ProgressController extends Controller
      */
     public function week(Request $request): JsonResponse
     {
-        $user = $request->user();
-
         /*
          * Monday to Sunday of the week containing today, on the display clock
          * — the same one `currentStreak` is judged on, so the badge and the
@@ -44,25 +46,65 @@ class ProgressController extends Controller
          * so every morning before then this marked yesterday as today and the
          * whole strip read eight hours stale.
          */
-        $start = Day::now()->startOfWeek();
-        $end = Day::now()->endOfWeek();
+        return $this->window(
+            $request->user(),
+            Day::now()->startOfWeek(),
+            Day::now()->endOfWeek(),
+        );
+    }
+
+    /**
+     * The same shape, over an arbitrary window.
+     *
+     * `week` is what the app draws and deliberately cannot be asked about a
+     * different week; this exists for systems that mirror the record and need
+     * to backfill — without it, a day that has scrolled out of the current week
+     * is unreachable for good.
+     *
+     * `start` is required and `end` defaults to today. The span is capped at a
+     * year: one person's wins over a window are cheap to read, but the window
+     * should not be unbounded just because a caller left the end off.
+     */
+    public function range(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'start' => ['required', 'date_format:Y-m-d'],
+            'end' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:start'],
+        ]);
+
+        $start = Day::startOf(Carbon::parse($validated['start'], Day::zone()));
+        $end = isset($validated['end'])
+            ? Day::startOf(Carbon::parse($validated['end'], Day::zone()))->endOfDay()
+            : Day::now()->endOfDay();
+
+        if ($start->diffInDays($end) > self::MAX_RANGE_DAYS) {
+            throw ValidationException::withMessages([
+                'end' => 'The window may not be longer than '.self::MAX_RANGE_DAYS.' days.',
+            ]);
+        }
+
+        return $this->window($request->user(), $start, $end);
+    }
+
+    /**
+     * Build the response for one window: a day at a time, each saying which of
+     * the three kinds of win were logged, plus the streak figures the caller
+     * would otherwise have to ask a second endpoint for.
+     */
+    protected function window(User $user, Carbon $start, Carbon $end): JsonResponse
+    {
         $today = Day::startOf();
 
         $meditation = $this->daysLogged(WinMeditation::query()->getModel(), $user, $start, $end);
         $learning = $this->daysLogged(WinLearning::query()->getModel(), $user, $start, $end);
         $movement = $this->daysLogged(WinMovement::query()->getModel(), $user, $start, $end);
 
-        $days = collect(range(0, 6))->map(function (int $offset) use (
-            $start,
-            $today,
-            $meditation,
-            $learning,
-            $movement,
-        ): array {
-            $day = $start->copy()->addDays($offset);
+        $days = [];
+
+        for ($day = $start->copy(); $day->lessThanOrEqualTo($end); $day->addDay()) {
             $date = $day->toDateString();
 
-            return [
+            $days[] = [
                 'date' => $date,
                 // Sent rather than derived, so every client shows the same
                 // three letters instead of each inventing its own shortening.
@@ -79,7 +121,7 @@ class ProgressController extends Controller
                 'learning' => $learning->contains($date),
                 'movement' => $movement->contains($date),
             ];
-        });
+        }
 
         return response()->json([
             'data' => [

@@ -155,3 +155,86 @@ test('a streak that has already lapsed is reported as broken', function () {
         ->assertOk()
         ->assertJsonPath('data.streak_days', 0);
 });
+
+test('guests cannot read a range', function () {
+    app()['auth']->forgetGuards();
+
+    $this->getJson(route('api.v1.progress.range', ['start' => '2026-07-01']))->assertUnauthorized();
+});
+
+test('a range answers for the window asked for, a day at a time', function () {
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
+
+    $response = $this->getJson(route('api.v1.progress.range', [
+        'start' => '2026-07-01',
+        'end' => '2026-07-10',
+    ]))->assertOk();
+
+    expect($response->json('data.start'))->toBe('2026-07-01')
+        ->and($response->json('data.end'))->toBe('2026-07-10')
+        ->and($response->json('data.days'))->toHaveCount(10)
+        ->and($response->json('data.days.0.date'))->toBe('2026-07-01')
+        ->and($response->json('data.days.9.date'))->toBe('2026-07-10');
+});
+
+test('a range reaches days the current week no longer covers', function () {
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
+
+    // Three weeks before the week `week` would answer for.
+    $post = Post::factory()->for($this->user)->create();
+    WinMovement::factory()->for($post, 'post')->create([
+        'completed_at' => storedAtLocal('2026-07-08 18:00:00'),
+    ]);
+
+    $days = collect($this->getJson(route('api.v1.progress.range', [
+        'start' => '2026-07-01',
+        'end' => '2026-07-10',
+    ]))->assertOk()->json('data.days'))->keyBy('date');
+
+    expect($days['2026-07-08'])->toMatchArray([
+        'movement' => true,
+        'meditation' => false,
+        'learning' => false,
+        'is_future' => false,
+    ]);
+});
+
+test('the end of a range defaults to today', function () {
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
+
+    $response = $this->getJson(route('api.v1.progress.range', ['start' => '2026-07-27']))->assertOk();
+
+    expect($response->json('data.end'))->toBe('2026-07-29')
+        ->and($response->json('data.days'))->toHaveCount(3)
+        ->and(collect($response->json('data.days'))->last()['is_today'])->toBeTrue();
+});
+
+test('a range carries the same streak figures as the week', function () {
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
+
+    $response = $this->getJson(route('api.v1.progress.range', ['start' => '2026-07-27']))->assertOk();
+
+    expect($response->json('data'))->toHaveKeys(['streak_days', 'longest_streak']);
+});
+
+test('a range needs a start', function () {
+    $this->getJson(route('api.v1.progress.range'))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('start');
+});
+
+test('a range will not run backwards', function () {
+    $this->getJson(route('api.v1.progress.range', ['start' => '2026-07-10', 'end' => '2026-07-01']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('end');
+});
+
+test('a range is capped at a year', function () {
+    Carbon::setTestNow(atLocal('2026-07-29 10:00:00'));
+
+    // Unbounded windows are how one caller leaving the end off turns into a
+    // scan of every win the account has ever logged.
+    $this->getJson(route('api.v1.progress.range', ['start' => '2020-01-01', 'end' => '2026-07-29']))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('end');
+});
