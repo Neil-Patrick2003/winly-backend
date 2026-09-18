@@ -429,8 +429,8 @@ class PostController extends Controller
      */
     protected function applyWin(Post $post, array $win): array
     {
-        $shared = ['completed_at' => $this->completedAt($win)];
         $type = (string) $win['type'];
+        $shared = $this->completedAtForEdit($post, $type, $win);
 
         /*
          * `updateOrCreate` against no attributes finds whatever row the post
@@ -637,6 +637,53 @@ class PostController extends Controller
     protected function completedAt(array $win): Carbon
     {
         return Day::utc(Carbon::parse($win['completed_at'] ?? now()));
+    }
+
+    /**
+     * Whether an edit should rewrite when a win was completed, and to what.
+     *
+     * Only if the caller says so. An edit restates the whole post, but that is
+     * a statement about what the post says rather than about when the thing it
+     * records happened — and stamping the moment of the edit moves the win
+     * onto the day it was corrected on. That takes the ring off the day it was
+     * actually earned, lights one nobody logged, and breaks the run through
+     * the gap left behind: a typo fixed just after midnight cost an eleven day
+     * streak and credited a day the person had not yet shown up for.
+     *
+     * Correcting the day is still possible. It just has to be asked for, which
+     * is what separates it from an edit that says nothing on the subject.
+     *
+     * A kind being *added* by this edit has no earlier answer to keep, so it
+     * is completed now — exactly as one arriving on a new post is.
+     *
+     * @param  array<string, mixed>  $win
+     * @return array{completed_at?: Carbon}
+     */
+    protected function completedAtForEdit(Post $post, string $type, array $win): array
+    {
+        return isset($win['completed_at']) || ! $this->hasWin($post, $type)
+            ? ['completed_at' => $this->completedAt($win)]
+            : [];
+    }
+
+    /**
+     * Whether a post already carries one kind of win.
+     *
+     * Asked of the database rather than the loaded relation, which the form
+     * request has usually already read and would answer from before the edit
+     * started.
+     */
+    protected function hasWin(Post $post, string $type): bool
+    {
+        return match ($type) {
+            'meditation' => $post->winMeditation()->exists(),
+            'learning' => $post->winLearning()->exists(),
+            'movement' => $post->winMovement()->exists(),
+            // Unreachable: validation has already narrowed the type to one of
+            // the three. Stated so a fourth kind added to the model without a
+            // branch here fails loudly rather than quietly restamping the day.
+            default => throw new InvalidArgumentException("Unknown win type [{$type}]."),
+        };
     }
 
     /**

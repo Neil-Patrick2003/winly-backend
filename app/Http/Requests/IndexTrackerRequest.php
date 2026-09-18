@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Concerns\ResolvesStatWindow;
 use App\Models\Post;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -288,12 +290,23 @@ class IndexTrackerRequest extends FormRequest
      * Whole days rather than a rolling window of hours, so a win logged this
      * morning and one logged last night both count for today — which is how a
      * streak counts them too.
+     *
+     * Cut on the display clock and handed back as the UTC instant it falls on,
+     * the same bargain {@see ResolvesStatWindow} strikes for the console. Both
+     * halves matter. Read in UTC, `today()` does not turn over until eight in
+     * the morning here, so everything logged between midnight and breakfast
+     * fell outside the day it was logged on and the tracker showed nothing
+     * against it. Returned on the local clock, every `whereBetween` built on
+     * it would be compared against a UTC column and land off by the offset.
+     *
+     * Name one of these days with {@see Day::dateOf()}, never `toDateString()`,
+     * which would read the UTC date the instant sits on.
      */
     public function from(): CarbonInterface
     {
-        return $this->filled('from')
-            ? $this->date('from')->startOfDay()
-            : today()->subDays(self::DEFAULT_DAYS - 1);
+        return Day::utc($this->filled('from')
+            ? Day::startOfDate($this->date('from'))
+            : Day::startOf()->subDays(self::DEFAULT_DAYS - 1));
     }
 
     /**
@@ -302,16 +315,20 @@ class IndexTrackerRequest extends FormRequest
      */
     public function to(): CarbonInterface
     {
-        return $this->filled('to')
-            ? $this->date('to')->endOfDay()
-            : today()->endOfDay();
+        return Day::utc($this->filled('to')
+            ? Day::startOfDate($this->date('to'))->endOfDay()
+            : Day::startOf()->endOfDay());
     }
 
     /**
      * How many days the range covers, both ends included.
+     *
+     * Counted on local calendar days rather than on the instants: the bounds
+     * are whole days on the display clock, and measuring the offset between
+     * them in UTC loses one wherever the range straddles a local midnight.
      */
     public function days(): int
     {
-        return (int) $this->from()->startOfDay()->diffInDays($this->to()->startOfDay()) + 1;
+        return (int) Day::startOf($this->from())->diffInDays(Day::startOf($this->to())) + 1;
     }
 }

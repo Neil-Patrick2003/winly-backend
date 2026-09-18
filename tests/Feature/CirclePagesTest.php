@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -92,6 +93,19 @@ function shareWin(Circle $circle, User $user, string $type, CarbonInterface $on)
     };
 }
 
+/**
+ * A time of day today, on the clock the tracker cuts its days on.
+ *
+ * `today()` is midnight in UTC, so naming an evening hour off it lands in the
+ * small hours of tomorrow here — a whole day boundary away from the evening it
+ * reads as. Anything naming an hour has to be built on the display clock and
+ * converted after, or it falls on the day after the one the test means.
+ */
+function todayAtLocal(string $time): CarbonInterface
+{
+    return Day::utc(Day::startOf()->setTimeFromTimeString($time));
+}
+
 test('the tracker counts each kind of win a member has shared', function () {
     shareWin($this->circle, $this->member, 'meditation', today());
     shareWin($this->circle, $this->member, 'meditation', today()->subDays(2));
@@ -116,9 +130,9 @@ test('the tracker counts each kind of win a member has shared', function () {
 test('the total counts days logged, not wins stacked into one day', function () {
     // Four wins, three of them on the same day — two of those the same kind,
     // so both the per-table dedupe and the union across tables are exercised.
-    shareWin($this->circle, $this->member, 'meditation', today()->setTime(7, 0));
-    shareWin($this->circle, $this->member, 'meditation', today()->setTime(12, 15));
-    shareWin($this->circle, $this->member, 'movement', today()->setTime(18, 30));
+    shareWin($this->circle, $this->member, 'meditation', todayAtLocal('07:00'));
+    shareWin($this->circle, $this->member, 'meditation', todayAtLocal('12:15'));
+    shareWin($this->circle, $this->member, 'movement', todayAtLocal('18:30'));
     shareWin($this->circle, $this->member, 'learning', today()->subDays(3));
 
     $this->actingAs($this->member)
@@ -134,9 +148,9 @@ test('the total counts days logged, not wins stacked into one day', function () 
 
 test('a kind is worth one point on a day, however often it was logged', function () {
     // Four wins, three of them stacked into today and one three days back.
-    shareWin($this->circle, $this->member, 'meditation', today()->setTime(7, 0));
-    shareWin($this->circle, $this->member, 'meditation', today()->setTime(12, 15));
-    shareWin($this->circle, $this->member, 'movement', today()->setTime(18, 30));
+    shareWin($this->circle, $this->member, 'meditation', todayAtLocal('07:00'));
+    shareWin($this->circle, $this->member, 'meditation', todayAtLocal('12:15'));
+    shareWin($this->circle, $this->member, 'movement', todayAtLocal('18:30'));
     shareWin($this->circle, $this->member, 'learning', today()->subDays(3));
 
     $this->actingAs($this->member)
@@ -323,13 +337,16 @@ test('both ends of the range are counted, not just what falls between', function
 });
 
 test('a win late on the closing day is still inside the range', function () {
-    shareWin($this->circle, $this->member, 'learning', today()->setTime(23, 45));
+    shareWin($this->circle, $this->member, 'learning', todayAtLocal('23:45'));
 
     $this->actingAs($this->member)
         ->get(route('circles.tracker', [
             'circle' => $this->circle,
-            'from' => today()->toDateString(),
-            'to' => today()->toDateString(),
+            // Named on the display clock, the same one the win above was
+            // built on — a UTC date would name a different day for the eight
+            // hours after local midnight.
+            'from' => Day::now()->toDateString(),
+            'to' => Day::now()->toDateString(),
         ]))
         ->assertOk()
         ->assertInertia(fn ($page) => $page
@@ -1579,4 +1596,49 @@ test('the posts tab shuts a non-member out of a private circle entirely', functi
     $this->actingAs(User::factory()->create())
         ->get(route('circles.posts', $this->circle))
         ->assertForbidden();
+});
+
+test('the tracker files a win logged after local midnight under that day', function () {
+    // The reported bug. Half past one in the morning is the same UTC day as
+    // the evening before at UTC+8, so a range cut in UTC opened eight hours
+    // late and the tracker showed nothing against the day it was logged on.
+    shareWin($this->circle, $this->member, 'movement', storedAtLocal('2026-09-15 01:30:00'));
+
+    $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => '2026-09-15',
+            'to' => '2026-09-15',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('from', '2026-09-15')
+            ->where('to', '2026-09-15')
+            ->where('days', 1)
+            ->where('members.data.1.full_name', 'Bea Member')
+            ->where('members.data.1.wins.movement', 1)
+            ->where('members.data.1.total', 1)
+        );
+});
+
+test('the tracker leaves a late evening win on the day it belongs to', function () {
+    // The other side of the same boundary: eleven at night must not spill
+    // forward into tomorrow the way one in the morning must not fall back.
+    shareWin($this->circle, $this->member, 'movement', storedAtLocal('2026-09-14 23:00:00'));
+
+    $tracker = fn (string $day) => $this->actingAs($this->member)
+        ->get(route('circles.tracker', [
+            'circle' => $this->circle,
+            'from' => $day,
+            'to' => $day,
+        ]))
+        ->assertOk();
+
+    $tracker('2026-09-14')->assertInertia(fn ($page) => $page
+        ->where('members.data.1.total', 1)
+    );
+
+    $tracker('2026-09-15')->assertInertia(fn ($page) => $page
+        ->where('members.data.1.total', 0)
+    );
 });
