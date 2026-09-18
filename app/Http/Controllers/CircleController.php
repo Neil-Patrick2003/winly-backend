@@ -16,6 +16,7 @@ use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
 use App\Rules\MediaFile;
+use App\Support\Day;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -24,6 +25,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -572,8 +574,11 @@ class CircleController extends Controller
             'sort' => $sort,
             'circle' => $this->circleProps($request, $circle),
             'winTypes' => Post::WIN_TYPES,
-            'from' => $request->from()->toDateString(),
-            'to' => $request->to()->toDateString(),
+            // Named on the display clock. The bounds are UTC instants, so
+            // `toDateString()` would hand the date picker the UTC day they sit
+            // on rather than the local one they were asked for.
+            'from' => Day::dateOf($request->from()),
+            'to' => Day::dateOf($request->to()),
             'days' => $request->days(),
             'members' => $members,
         ]);
@@ -926,14 +931,25 @@ class CircleController extends Controller
                 ->whereBetween("{$table}.completed_at", [$from, $to])
                 ->select([
                     "{$posts}.user_id",
-                    DB::raw("date({$table}.completed_at) as logged_on"),
+                    "{$table}.completed_at",
                 ])
                 ->distinct()
                 ->toBase()
                 ->get();
 
             foreach ($rows as $row) {
-                $seen[$row->user_id][$type][$row->logged_on] = true;
+                // Folded in PHP rather than by a raw `date()`, which groups on
+                // the clock the column is stored in — UTC. At UTC+8 that ran
+                // every bucket from eight in the morning to eight the next, so
+                // a win logged at one in the morning landed on the day before
+                // and the tracker disagreed with the streak and the week strip
+                // about which day anybody turned up on.
+                //
+                // The same reasoning, and the same answer, as
+                // {@see \App\Concerns\GroupsByLocalDay}.
+                $day = Day::dateOf(Carbon::parse($row->completed_at));
+
+                $seen[$row->user_id][$type][$day] = true;
             }
         }
 
