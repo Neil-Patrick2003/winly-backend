@@ -6,6 +6,7 @@ use App\Models\WinLearning;
 use App\Models\WinMeditation;
 use App\Models\WinMovement;
 use App\Rules\MediaFile;
+use App\Support\Day;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
@@ -405,4 +406,59 @@ test('saying nothing about completion reads as completed', function () {
     ])
         ->assertOk()
         ->assertJsonPath('data.wins.0.completed', true);
+});
+
+test('an edit leaves the win on the day it was completed', function () {
+    // Eleven days running, the last of them on the fourteenth.
+    $ids = collect(range(4, 14))->map(function (int $day): string {
+        $this->travelTo(atLocal(sprintf('2026-09-%02d 09:00:00', $day)));
+
+        return $this->postJson(route('api.v1.posts.store'), [
+            'visibility' => 'public',
+            'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
+        ])->assertCreated()->json('data.id');
+    });
+
+    expect($this->user->refresh()->streak_days)->toBe(11);
+
+    // Half past midnight, fixing the caption on the walk logged that evening.
+    // The edit screen restates the win without saying when it happened, which
+    // is not the same as saying it happened now.
+    $this->travelTo(atLocal('2026-09-15 00:30:00'));
+
+    $this->patchJson(route('api.v1.posts.update', $ids->last()), [
+        'visibility' => 'public',
+        'caption' => 'Went a bit further than usual.',
+        'wins' => [['type' => 'movement', 'movement_type' => 'walk']],
+    ])->assertOk();
+
+    $win = WinMovement::where('post_id', $ids->last())->sole();
+
+    expect(Day::dateOf($win->completed_at))->toBe('2026-09-14');
+
+    $this->user->refresh();
+
+    expect($this->user->last_win_on?->toDateString())->toBe('2026-09-14')
+        ->and($this->user->streak_days)->toBe(11);
+});
+
+test('a kind of win added by an edit is completed now', function () {
+    $this->travelTo(atLocal('2026-09-14 09:00:00'));
+
+    $post = postWithMovement();
+
+    // The walk was logged this morning; the sitting is being added tonight and
+    // has no earlier answer of its own to keep.
+    $this->travelTo(atLocal('2026-09-14 21:00:00'));
+
+    $this->patchJson(route('api.v1.posts.update', $post), [
+        'visibility' => 'public',
+        'wins' => [
+            ['type' => 'movement', 'movement_type' => 'walk'],
+            ['type' => 'meditation', 'duration_minutes' => 10],
+        ],
+    ])->assertOk();
+
+    expect(Day::on(WinMovement::sole()->completed_at)->format('H:i'))->toBe('09:00')
+        ->and(Day::on(WinMeditation::sole()->completed_at)->format('H:i'))->toBe('21:00');
 });
