@@ -261,6 +261,7 @@ class PostController extends Controller
                 $user,
                 $visibility,
                 $request->validated('circle_ids') ?? [],
+                $request->boolean('share_to_circles', true),
             ));
 
             $wins = $request->validated('wins');
@@ -334,6 +335,7 @@ class PostController extends Controller
                 $post->user,
                 $visibility,
                 $request->validated('circle_ids') ?? [],
+                $request->boolean('share_to_circles', true),
             ));
 
             $wins = $request->validated('wins');
@@ -389,11 +391,11 @@ class PostController extends Controller
     /**
      * The circles a post should sit in, given who it is for.
      *
-     * Public belongs to no circle. It is readable by everybody, which is a
-     * different thing from being on a particular group's wall — that wall is
-     * meant to be what the group was actually given, and a win that went out to
-     * the world is not that. Putting one there is a second, deliberate act:
-     * the circle's own screen offers it, for every public win not on it yet.
+     * Public is the widest of the three: readable by everybody, and placed on
+     * the wall of every circle the author is in, resolved the same way as "all
+     * circles" below. That is what the share screen has always told people it
+     * does. `share_to_circles: false` keeps a public win off the walls, for an
+     * author who wants it out in the world but not in front of their groups.
      *
      * "All circles" is resolved here, once, to the circles the author is in at
      * this moment, and is then just a list like any other. That is what makes
@@ -402,16 +404,20 @@ class PostController extends Controller
      *
      * @param  list<string>  $chosen  The ids named by the author, when they
      *                                picked the circles themselves.
+     * @param  bool  $shareToCircles  Whether a public win also goes on the walls
+     *                                of every circle the author is in.
      * @return list<string>
      */
-    protected function circlesFor(User $author, string $visibility, array $chosen): array
+    protected function circlesFor(User $author, string $visibility, array $chosen, bool $shareToCircles): array
     {
+        $all = fn (): array => array_values(array_map(
+            strval(...),
+            $author->circles()->pluck('circles.id')->all(),
+        ));
+
         return match ($visibility) {
-            Post::VISIBILITY_PUBLIC => [],
-            Post::VISIBILITY_ALL_CIRCLES => array_values(array_map(
-                strval(...),
-                $author->circles()->pluck('circles.id')->all(),
-            )),
+            Post::VISIBILITY_PUBLIC => $shareToCircles ? $all() : [],
+            Post::VISIBILITY_ALL_CIRCLES => $all(),
             Post::VISIBILITY_CUSTOM => $chosen,
             // Unreachable: validation has already narrowed it to the three.
             // Stated so a fourth added to the model without a branch here fails
