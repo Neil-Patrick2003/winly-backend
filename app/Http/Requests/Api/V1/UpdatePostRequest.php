@@ -68,6 +68,13 @@ class UpdatePostRequest extends FormRequest
                     ->where('user_id', $this->user()?->getKey()),
             ],
 
+            // Same bargain as creating. See StorePostRequest.
+            'share_to_circles' => [
+                'sometimes',
+                'boolean',
+                'prohibited_unless:visibility,'.Post::VISIBILITY_PUBLIC,
+            ],
+
             'wins' => ['required', 'array', 'min:1', 'max:'.count(Post::WIN_TYPES)],
             'wins.*.type' => ['required', 'string', Rule::in(Post::WIN_TYPES), 'distinct'],
             'wins.*.completed_at' => ['nullable', 'date', 'before_or_equal:now'],

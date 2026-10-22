@@ -69,6 +69,20 @@ class StorePostRequest extends FormRequest
                     ->where('user_id', $this->user()?->getKey()),
             ],
 
+            /*
+             * Whether a public win also goes on the walls of every circle the
+             * author is in. Left out, it does — that is what the share screen
+             * promises. Readable by everybody either way; this only decides
+             * whether the groups see it where they look for what they were
+             * given. Refused with the other two, which already say which
+             * circles they mean.
+             */
+            'share_to_circles' => [
+                'sometimes',
+                'boolean',
+                'prohibited_unless:visibility,'.Post::VISIBILITY_PUBLIC,
+            ],
+
             'wins' => ['required', 'array', 'min:1', 'max:'.count(Post::WIN_TYPES)],
             'wins.*.type' => ['required', 'string', Rule::in(Post::WIN_TYPES), 'distinct'],
             'wins.*.completed_at' => ['nullable', 'date', 'before_or_equal:now'],
