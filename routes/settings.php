@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\AiIntegrationController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Auth\Middleware\RequirePassword;
@@ -24,6 +25,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
+
+    Route::get('settings/ai-integration', [AiIntegrationController::class, 'edit'])->name('ai-integration.edit');
+    Route::post('settings/ai-integration/tokens', [AiIntegrationController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('ai-integration.tokens.store');
+    Route::delete('settings/ai-integration/tokens/{token}', [AiIntegrationController::class, 'destroy'])
+        ->whereNumber('token')
+        ->name('ai-integration.tokens.destroy');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {
