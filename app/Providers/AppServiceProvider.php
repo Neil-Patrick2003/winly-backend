@@ -2,14 +2,20 @@
 
 namespace App\Providers;
 
+use App\Mcp\Servers\WelleServer;
 use App\Support\BrevoApiTransport;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Sanctum\PersonalAccessToken;
+use Laravel\Sanctum\Sanctum;
 use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
@@ -29,6 +35,39 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureMail();
+        $this->configureAiIntegrationTokens();
+    }
+
+    /**
+     * Keep AI integration tokens and app tokens apart.
+     *
+     * Both are Sanctum tokens, and Sanctum alone would let either open any
+     * `auth:sanctum` route. An AI integration token is pasted into third-party
+     * apps, so it opens the MCP server and nothing else
+     * — never the mobile API, where it could post or delete. The mobile app's
+     * own tokens, in turn, never open the MCP server.
+     *
+     * Calls are limited per token: a single chat turn can fire several tool
+     * calls back to back, and this leaves room for that while stopping a
+     * runaway agent from hammering the queries.
+     */
+    protected function configureAiIntegrationTokens(): void
+    {
+        Sanctum::authenticateAccessTokensUsing(function (PersonalAccessToken $token, bool $isValid): bool {
+            if (! $isValid) {
+                return false;
+            }
+
+            $isAiIntegrationToken = $token->abilities === [WelleServer::TOKEN_ABILITY];
+
+            return $isAiIntegrationToken === (bool) request()->routeIs('mcp');
+        });
+
+        RateLimiter::for('mcp', function (Request $request): Limit {
+            $token = $request->user()?->currentAccessToken();
+
+            return Limit::perMinute(60)->by('mcp:'.($token->id ?? $request->ip()));
+        });
     }
 
     /**

@@ -1,10 +1,12 @@
 import { Link } from '@inertiajs/react';
+import { Palette, ShieldCheck, Sparkles, UserRound } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { Page, PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn, toUrl } from '@/lib/utils';
+import { edit as editAiIntegration } from '@/routes/ai-integration';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit } from '@/routes/profile';
 import { edit as editSecurity } from '@/routes/security';
@@ -14,17 +16,22 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Profile',
         href: edit(),
-        icon: null,
+        icon: UserRound,
     },
     {
         title: 'Security',
         href: editSecurity(),
-        icon: null,
+        icon: ShieldCheck,
     },
     {
         title: 'Appearance',
         href: editAppearance(),
-        icon: null,
+        icon: Palette,
+    },
+    {
+        title: 'AI integration',
+        href: editAiIntegration(),
+        icon: Sparkles,
     },
 ];
 
