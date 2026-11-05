@@ -43,6 +43,9 @@ class RegisterRequest extends FormRequest
             'username' => $this->usernameRules(),
             'password' => $this->passwordRules(),
             'device_name' => ['required', 'string', 'max:255'],
+            // Ticking the box on the sign-up screen. Both app stores expect
+            // people to agree to the Terms before they can post anything.
+            'accept_terms' => ['accepted'],
         ];
     }
 
@@ -55,6 +58,7 @@ class RegisterRequest extends FormRequest
     {
         return [
             'username.regex' => 'The username may only contain lowercase letters, numbers, and underscores.',
+            'accept_terms.accepted' => 'Please agree to the Terms of Service and Privacy Policy.',
         ];
     }
 }

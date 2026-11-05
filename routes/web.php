@@ -26,11 +26,19 @@ use App\Http\Controllers\Dashboard\MemberOverviewController;
 use App\Http\Controllers\Dashboard\MembersStatController;
 use App\Http\Controllers\Dashboard\MyCirclesController;
 use App\Http\Controllers\Dashboard\StreakLeadersController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\PostCommentController;
 use App\Http\Controllers\PostLikeController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
+
+/*
+ * The Privacy Policy and the Terms, public so the app stores and the sign-up
+ * screen can link to them before anybody has an account.
+ */
+Route::get('/privacy', [LegalController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms', [LegalController::class, 'terms'])->name('legal.terms');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     /*

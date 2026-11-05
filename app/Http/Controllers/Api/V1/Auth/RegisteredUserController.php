@@ -20,6 +20,7 @@ class RegisteredUserController extends Controller
         $user = DB::transaction(fn (): User => User::create([
             ...$request->safe()->only(['full_name', 'username', 'email']),
             'password_hash' => $request->string('password')->value(),
+            'terms_accepted_at' => now(),
         ]));
 
         event(new Registered($user));
