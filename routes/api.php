@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Api\V1\Auth\NewPasswordController;
 use App\Http\Controllers\Api\V1\Auth\PasswordResetCodeController;
 use App\Http\Controllers\Api\V1\Auth\RegisteredUserController;
+use App\Http\Controllers\Api\V1\BlockController;
 use App\Http\Controllers\Api\V1\CircleController;
 use App\Http\Controllers\Api\V1\CircleInvitationController;
 use App\Http\Controllers\Api\V1\CommentController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Api\V1\PostLikeController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ProgressController;
 use App\Http\Controllers\Api\V1\PushTokenController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SavedPostController;
 use App\Http\Controllers\Api\V1\StoryController;
 use App\Http\Controllers\Api\V1\StoryReactionController;
@@ -49,7 +51,7 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         ->middleware('throttle:6,1')
         ->name('password.update');
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
             ->name('logout');
 
@@ -268,6 +270,27 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
         Route::delete('users/{user}/follow', [FollowController::class, 'destroy'])
             ->middleware('throttle:60,1')
             ->name('users.unfollow');
+
+        /*
+         * Blocking somebody hides the two of you from each other everywhere.
+         * `blocks` is the list Settings shows, to unblock from.
+         */
+        Route::get('blocks', [BlockController::class, 'index'])
+            ->name('blocks.index');
+
+        Route::post('users/{user}/block', [BlockController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('users.block');
+
+        Route::delete('users/{user}/block', [BlockController::class, 'destroy'])
+            ->middleware('throttle:30,1')
+            ->name('users.unblock');
+
+        // Flagging a post, comment, story or person for moderators. Hides
+        // nothing by itself; the app offers to block as well.
+        Route::post('reports', [ReportController::class, 'store'])
+            ->middleware('throttle:20,1')
+            ->name('reports.store');
 
         // Who liked it, for anyone who may read the post. Plural, so it does
         // not collide with the singular `posts/{post}/like` the caller acts on

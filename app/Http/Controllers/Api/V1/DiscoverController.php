@@ -82,6 +82,7 @@ class DiscoverController extends Controller
 
         $people = User::query()
             ->whereKeyNot($viewer->getKey())
+            ->whereNotIn('users.id', $viewer->hiddenUserIds())
             /*
              * Both narrowings belong to the shop window rather than to the
              * search box, and for the same reason: somebody you already follow

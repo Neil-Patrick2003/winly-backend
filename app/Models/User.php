@@ -15,9 +15,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -45,6 +47,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int $wins_count
  * @property bool $is_private
  * @property bool $is_admin
+ * @property Carbon|null $disabled_at
  * @property Carbon|null $last_active_at
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -150,6 +153,7 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
             'wins_count' => 'integer',
             'is_private' => 'boolean',
             'is_admin' => 'boolean',
+            'disabled_at' => 'datetime',
             'last_active_at' => 'datetime',
             'two_factor_confirmed_at' => 'datetime',
         ];
@@ -320,6 +324,73 @@ class User extends Authenticatable implements HasMedia, PasskeyUser
     public function habitLogs(): HasMany
     {
         return $this->hasMany(HabitLog::class);
+    }
+
+    /**
+     * The people this user has blocked.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function blockedUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'user_blocks', 'blocker_id', 'blocked_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Everybody hidden from this user, as a subquery of ids.
+     *
+     * A block works both ways: the people they blocked, and the people who
+     * blocked them. Accounts staff have disabled are in here for everyone. Neither side should see the other anywhere, otherwise
+     * blocking a harasser would still leave them reading your posts.
+     *
+     * A subquery rather than a list, so it can sit inside `whereNotIn` without
+     * a round trip first.
+     */
+    public function hiddenUserIds(): QueryBuilder
+    {
+        return DB::table('user_blocks')
+            ->where('blocker_id', $this->getKey())
+            ->select('blocked_id as id')
+            ->union(
+                DB::table('user_blocks')
+                    ->where('blocked_id', $this->getKey())
+                    ->select('blocker_id as id')
+            )
+            // Disabled accounts are hidden from everybody, so every place that
+            // already keeps blocked people out keeps them out too.
+            ->union(
+                DB::table('users')
+                    ->whereNotNull('disabled_at')
+                    ->select('id')
+            );
+    }
+
+    /**
+     * Whether either of these two people has blocked the other.
+     */
+    public function hasBlockWith(User $other): bool
+    {
+        return DB::table('user_blocks')
+            ->where(fn (QueryBuilder $query) => $query
+                ->where('blocker_id', $this->getKey())
+                ->where('blocked_id', $other->getKey()))
+            ->orWhere(fn (QueryBuilder $query) => $query
+                ->where('blocker_id', $other->getKey())
+                ->where('blocked_id', $this->getKey()))
+            ->exists();
+    }
+
+    /**
+     * Whether this user has blocked that one. One direction only, which is
+     * what decides whether the profile offers "Unblock".
+     */
+    public function hasBlocked(User $other): bool
+    {
+        return DB::table('user_blocks')
+            ->where('blocker_id', $this->getKey())
+            ->where('blocked_id', $other->getKey())
+            ->exists();
     }
 
     /**

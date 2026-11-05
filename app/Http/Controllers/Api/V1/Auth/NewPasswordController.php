@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Actions\ConsumePasswordResetCode;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Resources\Api\V1\UserResource;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class NewPasswordController extends Controller
 {
@@ -26,6 +28,11 @@ class NewPasswordController extends Controller
     public function store(ResetPasswordRequest $request, ConsumePasswordResetCode $consume): JsonResponse
     {
         $user = $request->resolveUser($consume);
+
+        // A new password is not a way back into a disabled account.
+        if ($user->disabled_at !== null) {
+            throw ValidationException::withMessages(['email' => EnsureAccountIsActive::MESSAGE]);
+        }
 
         DB::transaction(function () use ($user, $request): void {
             // `password_hash` is cast to `hashed`, so the plain value is what

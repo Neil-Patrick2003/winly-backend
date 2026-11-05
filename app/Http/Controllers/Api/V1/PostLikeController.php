@@ -35,6 +35,7 @@ class PostLikeController extends Controller
         $reader = $request->user();
 
         $likes = $post->likes()
+            ->whereNotIn('post_likes.user_id', $reader->hiddenUserIds())
             ->with(['user' => fn (Relation $query) => $query
                 ->withActiveStory()
                 ->withUnseenStory($reader)

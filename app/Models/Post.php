@@ -321,6 +321,10 @@ class Post extends Model
                         $reader->circles()->getQuery()->select('circles.id')
                     ));
         });
+
+        // Never anything from somebody either side has blocked, whatever the
+        // post's audience. Outside the group above, so it holds for all three.
+        $query->whereNotIn($query->qualifyColumn('user_id'), $reader->hiddenUserIds());
     }
 
     /**

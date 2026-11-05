@@ -39,6 +39,7 @@ class CommentController extends Controller
         $viewer = $request->user();
 
         $comments = $post->comments()
+            ->whereNotIn('comments.user_id', $viewer->hiddenUserIds())
             ->with([
                 'user' => fn (Relation $query) => $query->withActiveStory(),
                 'user.followers' => fn (Relation $query) => $query->whereKey($viewer->getKey()),

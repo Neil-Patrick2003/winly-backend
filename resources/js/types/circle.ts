@@ -73,6 +73,8 @@ export type AdminUserRow = {
     email: string;
     avatar_url: string | null;
     is_admin: boolean;
+    /** Switched off by staff: cannot sign in, and hidden from everyone. */
+    disabled: boolean;
     email_verified: boolean;
     joined_at: string | null;
 };
@@ -182,4 +184,62 @@ export type Paginated<T> = {
     to: number | null;
     prev_page_url: string | null;
     next_page_url: string | null;
+};
+
+/** Someone on a report: whoever filed it, or whoever it is about. */
+export type AdminReportPerson = {
+    id: string;
+    full_name: string;
+    username: string | null;
+    avatar_url: string | null;
+    is_admin: boolean;
+    disabled: boolean;
+};
+
+/**
+ * One reported thing on the moderation queue, with everybody who reported it.
+ * Shaped by `Admin\ReportController::card`.
+ */
+export type AdminReportRow = {
+    /** The newest report, which the buttons act on. Acting closes them all. */
+    id: string;
+    type: 'post' | 'comment' | 'story' | 'user';
+    status: 'pending' | 'actioned' | 'dismissed';
+    /** How many people reported it. */
+    times_reported: number;
+    /** Every reason given, most common first. */
+    reasons: string[];
+    notes: { by: string; text: string }[];
+    first_reported_at: string | null;
+    reviewed_at: string | null;
+    reporters: AdminReportPerson[];
+    author: AdminReportPerson | null;
+    /** Null once the reported thing has been deleted. */
+    target: {
+        text: string | null;
+        images: string[];
+        detail: string | null;
+    } | null;
+};
+
+/**
+ * A post on a circle's wall that members reported, as its owner sees it.
+ * Who reported it is never included. Shaped by
+ * `CircleManagementController::reports`.
+ */
+export type CircleReportedPost = {
+    post_id: string;
+    times_reported: number;
+    reasons: string[];
+    first_reported_at: string | null;
+    caption: string | null;
+    images: string[];
+    author: {
+        id: string;
+        full_name: string;
+        username: string | null;
+        avatar_url: string | null;
+        is_member: boolean;
+        is_owner: boolean;
+    };
 };

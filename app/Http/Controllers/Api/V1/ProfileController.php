@@ -36,6 +36,11 @@ class ProfileController extends Controller
      */
     public function show(Request $request, User $user): ProfileResource
     {
+        // Somebody who blocked the reader is simply not there for them. The
+        // reader's own blocks still open, so there is somewhere to unblock from.
+        abort_if($user->hasBlocked($request->user()), 404);
+        abort_if($user->disabled_at !== null, 404);
+
         return $this->profile($user, $request->user());
     }
 

@@ -5,6 +5,7 @@ import {
     Settings2,
     ShieldCheck,
     UserCog,
+    Flag,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -23,6 +24,7 @@ import { dashboard } from '@/routes';
 import {
     circles as adminCircles,
     dashboard as adminDashboard,
+    reports as adminReports,
     users as adminUsers,
 } from '@/routes/admin';
 import { index as circlesIndex } from '@/routes/circles';
@@ -53,6 +55,11 @@ const adminGroup: NavGroup = {
             title: 'All circles',
             href: adminCircles(),
             icon: ShieldCheck,
+        },
+        {
+            title: 'Reports',
+            href: adminReports(),
+            icon: Flag,
         },
     ],
 };

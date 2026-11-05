@@ -12,6 +12,8 @@ use App\Http\Requests\UpdateCircleRequest;
 use App\Models\Circle;
 use App\Models\CircleInvitation;
 use App\Models\CircleMembership;
+use App\Models\Post;
+use App\Models\Report;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -115,6 +117,7 @@ class CircleManagementController extends Controller
             'canAddSubCircle' => ! $circle->isSubCircle(),
             'invitations' => $this->pendingInvitations($circle),
             'blocked' => $this->blocked($circle),
+            'reports' => $this->reports($circle),
             'candidates' => $this->candidates($request, $circle),
             'search' => $request->string('search')->value(),
         ]);
@@ -350,6 +353,104 @@ class CircleManagementController extends Controller
                 'avatar_url' => $user->avatar_url,
             ])
             ->all());
+    }
+
+    /**
+     * Posts in this circle that members have reported, waiting on staff.
+     *
+     * One entry per post, with how many reported it and why. Who reported it
+     * is left out on purpose: a report is private, and the person running a
+     * circle is another member, not staff.
+     *
+     * What the owner does here is local to the circle: taking the post off its
+     * wall, or removing or blocking its author. It does not close the report;
+     * staff still decide about the post everywhere else.
+     *
+     * @return list<array<string, mixed>>
+     */
+    protected function reports(Circle $circle): array
+    {
+        $postIds = $circle->posts()->select('posts.id');
+
+        $reports = Report::query()
+            ->where('status', Report::STATUS_PENDING)
+            ->where('reportable_type', (new Post)->getMorphClass())
+            ->whereIn('reportable_id', $postIds)
+            ->get();
+
+        if ($reports->isEmpty()) {
+            return [];
+        }
+
+        $posts = Post::query()
+            ->whereKey($reports->pluck('reportable_id')->unique()->all())
+            ->with(['user', 'winMeditation.media', 'winLearning.media', 'winMovement.media'])
+            ->get()
+            ->keyBy('id');
+
+        $memberIds = $circle->memberships()
+            ->whereIn('user_id', $posts->pluck('user_id')->all())
+            ->pluck('user_id')
+            ->flip();
+
+        return array_values($reports
+            ->groupBy('reportable_id')
+            ->filter(fn ($group, string $postId) => $posts->has($postId))
+            ->sortByDesc(fn ($group) => $group->count())
+            ->map(function ($group, string $postId) use ($posts, $memberIds, $circle): array {
+                $post = $posts->get($postId);
+
+                return [
+                    'post_id' => $post->id,
+                    'times_reported' => $group->count(),
+                    'reasons' => $group
+                        ->countBy(fn (Report $report) => $report->reasonLabel())
+                        ->sortDesc()
+                        ->keys()
+                        ->values()
+                        ->all(),
+                    'first_reported_at' => $group->min('created_at')?->toIso8601String(),
+                    'caption' => $post->caption,
+                    'images' => collect([$post->winMeditation, $post->winLearning, $post->winMovement])
+                        ->filter()
+                        ->flatMap(fn ($win) => $win->media)
+                        ->filter(fn ($media) => str_starts_with((string) $media->mime_type, 'image/'))
+                        ->map(fn ($media) => url($media->getUrl()))
+                        ->take(4)
+                        ->values()
+                        ->all(),
+                    'author' => [
+                        'id' => $post->user->id,
+                        'full_name' => $post->user->full_name,
+                        'username' => $post->user->username,
+                        'avatar_url' => $post->user->avatar_url,
+                        // Only a current member can be removed, and never the
+                        // person who made the circle.
+                        'is_member' => $memberIds->has($post->user_id),
+                        'is_owner' => $post->user_id === $circle->owner_id,
+                    ],
+                ];
+            })
+            ->all());
+    }
+
+    /**
+     * Take a post off this circle's wall.
+     *
+     * The post itself stays: it may be public, or shared into other circles,
+     * and those are not this owner's to decide. Only staff delete it outright.
+     */
+    public function removePost(Circle $circle, Post $post): RedirectResponse
+    {
+        Gate::authorize('manage', $circle);
+
+        $detached = $circle->posts()->detach($post->getKey());
+
+        abort_if($detached === 0, 404);
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Post removed from this circle.')]);
+
+        return back();
     }
 
     /**

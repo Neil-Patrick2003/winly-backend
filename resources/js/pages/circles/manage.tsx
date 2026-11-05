@@ -2,6 +2,8 @@ import { Form, Head, Link, router, useForm } from '@inertiajs/react';
 import {
     Ban,
     Crown,
+    EyeOff,
+    Flag,
     Search,
     ShieldMinus,
     ShieldPlus,
@@ -44,6 +46,7 @@ import type {
     CircleHeader,
     CircleMember,
     CirclePerson,
+    CircleReportedPost,
     InviteCandidate,
     Paginated,
     PendingInvitation,
@@ -53,7 +56,7 @@ const listStyles =
     'divide-y divide-border overflow-hidden rounded-card border border-border shadow-card';
 
 /** The groups the settings are split across. */
-type TabKey = 'details' | 'inner' | 'people' | 'danger';
+type TabKey = 'details' | 'inner' | 'people' | 'reports' | 'danger';
 
 export default function Manage({
     circle,
@@ -64,6 +67,7 @@ export default function Manage({
     blocked,
     candidates,
     search,
+    reports,
 }: {
     circle: CircleHeader;
     /** The circles sitting inside this one. */
@@ -80,6 +84,8 @@ export default function Manage({
     blocked: CirclePerson[];
     candidates: InviteCandidate[];
     search: string | null;
+    /** Posts on this circle's wall that members reported. */
+    reports: CircleReportedPost[];
 }) {
     /**
      * Which group is showing.
@@ -106,6 +112,7 @@ export default function Manage({
               ]
             : []),
         { key: 'people', label: 'People', count: members.total },
+        { key: 'reports', label: 'Reports', count: reports.length },
         { key: 'danger', label: 'Danger' },
     ];
 
@@ -865,6 +872,202 @@ export default function Manage({
                                 </ul>
                             </SettingsSection>
                         )}
+                    </div>
+
+                    <div
+                        className={
+                            tab === 'reports'
+                                ? 'flex flex-col gap-10'
+                                : 'hidden'
+                        }
+                    >
+                        <SettingsSection
+                            title="Reported posts"
+                            description="Wins on this circle's wall that members flagged. Who reported them stays private. Staff review every report too; what you do here only affects this circle."
+                        >
+                            {reports.length === 0 ? (
+                                <EmptyState
+                                    icon={Flag}
+                                    title="Nothing reported"
+                                    description="When a member reports a post shared here, it shows up in this list."
+                                />
+                            ) : (
+                                <ul className="space-y-4">
+                                    {reports.map((report) => {
+                                        const who =
+                                            report.author.username !== null
+                                                ? `@${report.author.username}`
+                                                : report.author.full_name;
+                                        const canActOnAuthor =
+                                            report.author.is_member &&
+                                            !report.author.is_owner;
+
+                                        return (
+                                            <li
+                                                key={report.post_id}
+                                                className="rounded-card border border-border bg-card p-4 shadow-card"
+                                            >
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <Badge
+                                                        variant={
+                                                            report.times_reported >
+                                                            1
+                                                                ? 'destructive'
+                                                                : 'outline'
+                                                        }
+                                                    >
+                                                        {report.times_reported ===
+                                                        1
+                                                            ? '1 person reported'
+                                                            : `${report.times_reported} people reported`}
+                                                    </Badge>
+                                                    <span className="text-sm font-medium">
+                                                        {report.reasons.join(
+                                                            ', ',
+                                                        )}
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
+                                                    {report.caption ? (
+                                                        <p className="text-sm whitespace-pre-line">
+                                                            {report.caption}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-sm text-muted-foreground italic">
+                                                            No caption.
+                                                        </p>
+                                                    )}
+                                                    {report.images.length >
+                                                        0 && (
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {report.images.map(
+                                                                (src) => (
+                                                                    <img
+                                                                        key={
+                                                                            src
+                                                                        }
+                                                                        src={
+                                                                            src
+                                                                        }
+                                                                        alt=""
+                                                                        className="size-20 rounded-md object-cover"
+                                                                    />
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <PersonRow
+                                                    className="mt-3"
+                                                    person={report.author}
+                                                    meta={`Posted by ${who}`}
+                                                />
+
+                                                <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+                                                    <ConfirmDialog
+                                                        title="Remove this post from the circle?"
+                                                        description={`It comes off ${circle.name}'s wall. The post itself is not deleted, and stays wherever else it was shared.`}
+                                                        confirmLabel="Remove from circle"
+                                                        destructive
+                                                        onConfirm={() =>
+                                                            router.delete(
+                                                                CircleManagementController.removePost.url(
+                                                                    {
+                                                                        circle: circle.id,
+                                                                        post: report.post_id,
+                                                                    },
+                                                                ),
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
+                                                            )
+                                                        }
+                                                        trigger={
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                            >
+                                                                <EyeOff className="size-4" />
+                                                                Remove from
+                                                                circle
+                                                            </Button>
+                                                        }
+                                                    />
+
+                                                    {canActOnAuthor && (
+                                                        <>
+                                                            <ConfirmDialog
+                                                                title={`Remove ${report.author.full_name}?`}
+                                                                description={`They will lose access to ${circle.name} but can be invited back.`}
+                                                                confirmLabel="Remove"
+                                                                onConfirm={() =>
+                                                                    router.delete(
+                                                                        CircleManagementController.removeMember.url(
+                                                                            scoped(
+                                                                                report
+                                                                                    .author
+                                                                                    .id,
+                                                                            ),
+                                                                        ),
+                                                                        {
+                                                                            preserveScroll: true,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                trigger={
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                    >
+                                                                        <UserMinus className="size-4" />
+                                                                        Remove{' '}
+                                                                        {who}
+                                                                    </Button>
+                                                                }
+                                                            />
+
+                                                            <ConfirmDialog
+                                                                title={`Block ${report.author.full_name}?`}
+                                                                description="They will be removed from the circle, cannot rejoin, and any invitation still standing is cancelled."
+                                                                confirmLabel="Block"
+                                                                destructive
+                                                                onConfirm={() =>
+                                                                    router.post(
+                                                                        CircleManagementController.block.url(
+                                                                            scoped(
+                                                                                report
+                                                                                    .author
+                                                                                    .id,
+                                                                            ),
+                                                                        ),
+                                                                        {},
+                                                                        {
+                                                                            preserveScroll: true,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                trigger={
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                    >
+                                                                        <Ban className="size-4" />
+                                                                        Block{' '}
+                                                                        {who}
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </SettingsSection>
                     </div>
 
                     <div

@@ -1,16 +1,20 @@
 import { Head, router } from '@inertiajs/react';
 import {
     ArrowDown,
+    Ban,
     ArrowUp,
     ArrowUpDown,
     Check,
     Copy,
     KeyRound,
+    RotateCcw,
     Search,
     Users,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import AccountStatusController from '@/actions/App/Http/Controllers/Admin/AccountStatusController';
 import PasswordResetLinkController from '@/actions/App/Http/Controllers/Admin/PasswordResetLinkController';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { Page, PageHeader } from '@/components/page';
 import { Pagination } from '@/components/pagination';
@@ -247,7 +251,7 @@ export default function AdminUsers({
                                             scope="col"
                                             className="px-4 py-2.5 text-right font-medium text-muted-foreground"
                                         >
-                                            Reset
+                                            Actions
                                         </th>
                                     </tr>
                                 </thead>
@@ -272,6 +276,11 @@ export default function AdminUsers({
                                                             Admin
                                                         </Badge>
                                                     )}
+                                                    {user.disabled && (
+                                                        <Badge variant="destructive">
+                                                            Disabled
+                                                        </Badge>
+                                                    )}
                                                 </div>
                                             </td>
 
@@ -294,7 +303,77 @@ export default function AdminUsers({
                                                 {joinedOn(user.joined_at)}
                                             </td>
 
-                                            <td className="px-4 py-2.5 text-right">
+                                            <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                                                {user.disabled ? (
+                                                    <ConfirmDialog
+                                                        tooltip="Enable account"
+                                                        trigger={
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-muted-foreground"
+                                                            >
+                                                                <RotateCcw className="size-4" />
+                                                                <span className="sr-only">
+                                                                    Enable{' '}
+                                                                    {
+                                                                        user.full_name
+                                                                    }
+                                                                </span>
+                                                            </Button>
+                                                        }
+                                                        title={`Enable ${user.full_name}?`}
+                                                        description="They can sign in again, and their posts, comments and profile are visible again."
+                                                        confirmLabel="Enable"
+                                                        onConfirm={() =>
+                                                            router.post(
+                                                                AccountStatusController.enable.url(
+                                                                    user.id,
+                                                                ),
+                                                                {},
+                                                                {
+                                                                    preserveScroll: true,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                ) : (
+                                                    !user.is_admin && (
+                                                        <ConfirmDialog
+                                                            tooltip="Disable account"
+                                                            trigger={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    <Ban className="size-4" />
+                                                                    <span className="sr-only">
+                                                                        Disable{' '}
+                                                                        {
+                                                                            user.full_name
+                                                                        }
+                                                                    </span>
+                                                                </Button>
+                                                            }
+                                                            title={`Disable ${user.full_name}?`}
+                                                            description="They are signed out everywhere, cannot sign back in, and everything they posted is hidden. Nothing is deleted, so you can enable them again."
+                                                            confirmLabel="Disable account"
+                                                            destructive
+                                                            onConfirm={() =>
+                                                                router.post(
+                                                                    AccountStatusController.disable.url(
+                                                                        user.id,
+                                                                    ),
+                                                                    {},
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                    )
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
