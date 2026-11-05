@@ -245,6 +245,10 @@ Route::prefix('v1')->as('api.v1.')->group(function () {
             ->middleware('throttle:30,1')
             ->name('profile.update');
 
+        Route::delete('profile', [ProfileController::class, 'destroy'])
+            ->middleware('throttle:6,1')
+            ->name('profile.destroy');
+
         Route::get('users/{user}', [ProfileController::class, 'show'])
             ->name('users.show');
 
