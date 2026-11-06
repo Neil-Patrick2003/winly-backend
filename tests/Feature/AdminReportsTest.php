@@ -110,16 +110,24 @@ test('a reported comment can be deleted', function () {
 
 test('disabling from a report switches the author off', function () {
     $post = Post::factory()->for($this->author)->create();
-    $this->author->createToken('phone');
+    $token = $this->author->createToken('phone')->plainTextToken;
 
     $this->actingAs($this->admin)
         ->post(route('admin.reports.disable', reportOn($post, $this->reporter)))
         ->assertRedirect();
 
     expect($this->author->fresh()->disabled_at)->not->toBeNull()
-        ->and($this->author->tokens()->count())->toBe(0)
         // Disabling hides, it does not delete.
         ->and(Post::find($post->id))->not->toBeNull();
+
+    // The phone's next request is told why, and the token goes with it.
+    app()['auth']->forgetGuards();
+    $this->withToken($token)
+        ->getJson(route('api.v1.user'))
+        ->assertForbidden()
+        ->assertJsonPath('message', fn (string $message) => str_starts_with($message, 'This account has been disabled'));
+
+    expect($this->author->tokens()->count())->toBe(0);
 });
 
 test('staff cannot be disabled from a report', function () {

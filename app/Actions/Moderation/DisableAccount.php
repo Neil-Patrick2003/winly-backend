@@ -19,7 +19,11 @@ class DisableAccount
         DB::transaction(function () use ($user): void {
             $user->forceFill(['disabled_at' => now()])->save();
 
-            $user->tokens()->delete();
+            // API tokens are left for `EnsureAccountIsActive` to revoke on the
+            // device's next request. Revoked here, the app would only see a
+            // 401 and tell the person they were signed out, not why; the
+            // middleware answers that one request with the reason first. Every
+            // request in between is refused all the same.
             $user->pushTokens()->delete();
             DB::table('sessions')->where('user_id', $user->getKey())->delete();
         });
