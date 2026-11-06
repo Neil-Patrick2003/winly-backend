@@ -41,6 +41,7 @@ Route::inertia('/', 'welcome')->name('home');
  */
 Route::get('/privacy', [LegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [LegalController::class, 'terms'])->name('legal.terms');
+Route::get('/delete-account', [LegalController::class, 'deleteAccount'])->name('legal.delete-account');
 
 Route::middleware(['auth', 'active', 'verified'])->group(function () {
     /*

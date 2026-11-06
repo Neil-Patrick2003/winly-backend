@@ -6,7 +6,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
 
 /**
- * The Privacy Policy and the Terms of Service, as plain public web pages.
+ * The Privacy Policy, the Terms of Service and how to delete an account, as
+ * plain public web pages.
  *
  * Public on purpose: the app stores link to them from the listing, and the
  * sign-up screen links to them before anyone has an account. The app opens
@@ -22,6 +23,17 @@ class LegalController extends Controller
     public function terms(): View
     {
         return view('legal.terms', $this->details());
+    }
+
+    /**
+     * How to delete an account, including without the app.
+     *
+     * Google Play asks for this as its own link in the listing, reachable by
+     * someone who has already uninstalled the app.
+     */
+    public function deleteAccount(): View
+    {
+        return view('legal.delete-account', $this->details());
     }
 
     /**

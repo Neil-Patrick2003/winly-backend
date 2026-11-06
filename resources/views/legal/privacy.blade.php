@@ -74,10 +74,11 @@
         <strong>Profile → Settings → Delete account</strong>. This permanently removes your account
         and everything in it: your profile, photos, posts, stories, comments, likes, follows and
         circle memberships. Circles you created stay open for their other members. Copies may remain
-        in our server backups for a short time before they are overwritten.
+        in our server backups for up to 30 days before they are overwritten.
         @if ($contactEmail)
             If you can no longer sign in, email <a href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a> from the address on your account and we will delete it for you.
         @endif
+        <a href="{{ route('legal.delete-account') }}">More about deleting your account</a>.
     </p>
 
     <h2>Your rights</h2>

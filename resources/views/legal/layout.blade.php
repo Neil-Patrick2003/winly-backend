@@ -20,7 +20,7 @@
         .updated { color: #5B7268; font-size: 14px; margin: 0 0 28px; }
         h2 { font-size: 19px; margin: 32px 0 8px; }
         p, li { color: #2B4A3E; }
-        ul { padding-left: 22px; }
+        ul, ol { padding-left: 22px; }
         li { margin: 4px 0; }
         a { color: #2E7D56; }
         .card { background: #fff; border: 1px solid #E1E8DD; border-radius: 16px; padding: 4px 20px; margin-top: 8px; }
@@ -39,6 +39,8 @@
         <a href="{{ route('legal.privacy') }}">Privacy Policy</a>
         &nbsp;·&nbsp;
         <a href="{{ route('legal.terms') }}">Terms of Service</a>
+        &nbsp;·&nbsp;
+        <a href="{{ route('legal.delete-account') }}">Delete your account</a>
     </footer>
 </main>
 </body>
