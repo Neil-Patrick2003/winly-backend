@@ -20,6 +20,12 @@ class PostPolicy
      */
     public function view(User $user, Post $post): bool
     {
+        // A block hides a post from both people, public or not.
+        if ($user->id !== $post->user_id
+            && ($post->user->disabled_at !== null || $user->hasBlockWith($post->user))) {
+            return false;
+        }
+
         if ($post->isPublic() || $user->id === $post->user_id) {
             return true;
         }

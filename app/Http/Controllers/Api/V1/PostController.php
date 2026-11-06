@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Actions\RecalculateWinStats;
 use App\Actions\RecordWinStreak;
+use App\Actions\RemovePost;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\IndexPostRequest;
 use App\Http\Requests\Api\V1\StorePostRequest;
@@ -369,21 +370,11 @@ class PostController extends Controller
      * left pointing at wins that no longer exist and the bytes would sit on the
      * disk for ever.
      */
-    public function destroy(Request $request, Post $post, RecalculateWinStats $stats): JsonResponse
+    public function destroy(Post $post, RemovePost $removePost): JsonResponse
     {
         Gate::authorize('delete', $post);
 
-        $discarded = [];
-
-        DB::transaction(function () use ($post, &$discarded): void {
-            $discarded = $this->detachMedia($this->mediaFor($post));
-
-            $post->delete();
-        });
-
-        $this->discardFiles($discarded);
-
-        $stats->execute($request->user());
+        $removePost->execute($post);
 
         return response()->json(['data' => ['id' => $post->id]]);
     }
@@ -521,28 +512,6 @@ class PostController extends Controller
         $detail->deletePreservingMedia();
 
         return $discarded;
-    }
-
-    /**
-     * Every file hanging off a post's wins.
-     *
-     * Found through the wins rather than the post, because the media table has
-     * no column naming one. Win ids are uuids and so unique across every table,
-     * which is what lets `model_id` alone say the row belongs here.
-     *
-     * @return Collection<int, Media>
-     */
-    protected function mediaFor(Post $post): Collection
-    {
-        $post->loadMissing(['winMeditation', 'winLearning', 'winMovement']);
-
-        $winIds = array_values(array_filter([
-            $post->winMeditation?->getKey(),
-            $post->winLearning?->getKey(),
-            $post->winMovement?->getKey(),
-        ]));
-
-        return Media::query()->whereIn('model_id', $winIds)->get();
     }
 
     /**

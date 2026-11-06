@@ -65,7 +65,7 @@ test('user can delete their account', function () {
 
     $this->assertGuest();
     expect(User::find($user->id))->toBeNull();
-    $this->assertSoftDeleted($user);
+    $this->assertModelMissing($user);
 });
 
 test('correct password must be provided to delete account', function () {

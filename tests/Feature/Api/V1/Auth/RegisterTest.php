@@ -16,6 +16,7 @@ function registrationPayload(array $overrides = []): array
         'password' => 'password-password',
         'password_confirmation' => 'password-password',
         'device_name' => 'iPhone 17',
+        'accept_terms' => true,
     ], $overrides);
 }
 
@@ -151,4 +152,27 @@ test('the rule is the same one the app is told about', function () {
     // it, so it is what keeps the two from drifting apart again.
     expect(Password::defaults()->toPasswordRulesString())
         ->toBe('minlength: 8;');
+});
+
+test('signing up requires agreeing to the terms', function () {
+    $this->postJson(route('api.v1.register'), registrationPayload(['accept_terms' => false]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('accept_terms');
+
+    $payload = registrationPayload();
+    unset($payload['accept_terms']);
+
+    $this->postJson(route('api.v1.register'), $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('accept_terms');
+
+    expect(User::count())->toBe(0);
+});
+
+test('signing up records when the terms were agreed to', function () {
+    $this->freezeSecond();
+
+    $this->postJson(route('api.v1.register'), registrationPayload())->assertCreated();
+
+    expect(User::sole()->terms_accepted_at?->equalTo(now()))->toBeTrue();
 });

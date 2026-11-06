@@ -70,6 +70,13 @@ class ProfileResource extends JsonResource
             'is_self' => $isSelf,
 
             /*
+             * Whether the reader has blocked this person, so the profile can
+             * offer "Unblock" instead of "Follow". Only one direction: being
+             * blocked by them is answered with a 404 before this is built.
+             */
+            'is_blocked' => ! $isSelf && $request->user() !== null && $request->user()->hasBlocked($this->resource),
+
+            /*
              * Whether the reader follows this person.
              *
              * Present only where the caller loaded `followers` narrowed to the

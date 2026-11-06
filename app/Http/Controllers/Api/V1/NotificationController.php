@@ -24,6 +24,9 @@ class NotificationController extends Controller
     public function index(IndexCircleRequest $request): AnonymousResourceCollection
     {
         $notifications = $request->user()->notifications()
+            ->where(fn ($query) => $query
+                ->whereNull('actor_id')
+                ->orWhereNotIn('actor_id', $request->user()->hiddenUserIds()))
             ->with(['actor' => fn (Relation $query) => $query->withActiveStory()])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
@@ -42,7 +45,12 @@ class NotificationController extends Controller
     public function unreadCount(Request $request): JsonResponse
     {
         return response()->json([
-            'data' => ['unread' => $request->user()->notifications()->unread()->count()],
+            'data' => ['unread' => $request->user()->notifications()
+                ->unread()
+                ->where(fn ($query) => $query
+                    ->whereNull('actor_id')
+                    ->orWhereNotIn('actor_id', $request->user()->hiddenUserIds()))
+                ->count()],
         ]);
     }
 

@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\DeleteAccount;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\V1\DeleteAccountRequest;
 use App\Http\Requests\Api\V1\UpdateProfileRequest;
 use App\Http\Resources\Api\V1\ProfileResource;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 
 class ProfileController extends Controller
@@ -33,6 +36,11 @@ class ProfileController extends Controller
      */
     public function show(Request $request, User $user): ProfileResource
     {
+        // Somebody who blocked the reader is simply not there for them. The
+        // reader's own blocks still open, so there is somewhere to unblock from.
+        abort_if($user->hasBlocked($request->user()), 404);
+        abort_if($user->disabled_at !== null, 404);
+
         return $this->profile($user, $request->user());
     }
 
@@ -74,6 +82,19 @@ class ProfileController extends Controller
         $user->save();
 
         return $this->profile($user, $user);
+    }
+
+    /**
+     * Delete the signed-in user's account and everything in it.
+     *
+     * Permanent, and the password has to be given again first. The token used
+     * to ask goes with the rest, so the app should sign out locally on a 204.
+     */
+    public function destroy(DeleteAccountRequest $request, DeleteAccount $deleteAccount): Response
+    {
+        $deleteAccount->execute($request->user());
+
+        return response()->noContent();
     }
 
     /**

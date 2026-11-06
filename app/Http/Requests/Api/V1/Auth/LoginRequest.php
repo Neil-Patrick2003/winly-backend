@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api\V1\Auth;
 
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -54,6 +55,14 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+
+        // Only after the password checks out, so a disabled account is not
+        // something a stranger can find out about by guessing.
+        if ($user->disabled_at !== null) {
+            throw ValidationException::withMessages([
+                'email' => EnsureAccountIsActive::MESSAGE,
+            ]);
+        }
 
         return $user;
     }

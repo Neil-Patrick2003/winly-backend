@@ -70,6 +70,7 @@ class UserController extends Controller
                 'email' => $user->email,
                 'avatar_url' => $user->avatar_url,
                 'is_admin' => $user->is_admin,
+                'disabled' => $user->disabled_at !== null,
                 'email_verified' => $user->email_verified_at !== null,
                 'joined_at' => $user->created_at?->toIso8601String(),
             ]);

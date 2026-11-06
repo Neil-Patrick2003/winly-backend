@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\AccountStatusController;
 use App\Http\Controllers\Admin\CircleController as AdminCircleController;
 use App\Http\Controllers\Admin\CircleOwnershipController;
 use App\Http\Controllers\Admin\PasswordResetLinkController;
+use App\Http\Controllers\Admin\ReportController as AdminReportController;
 use App\Http\Controllers\Admin\Stats\AccountsStatController;
 use App\Http\Controllers\Admin\Stats\ActiveAccountsStatController;
 use App\Http\Controllers\Admin\Stats\CirclesStatController as AdminCirclesStatController;
@@ -26,13 +28,21 @@ use App\Http\Controllers\Dashboard\MemberOverviewController;
 use App\Http\Controllers\Dashboard\MembersStatController;
 use App\Http\Controllers\Dashboard\MyCirclesController;
 use App\Http\Controllers\Dashboard\StreakLeadersController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\PostCommentController;
 use App\Http\Controllers\PostLikeController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+/*
+ * The Privacy Policy and the Terms, public so the app stores and the sign-up
+ * screen can link to them before anybody has an account.
+ */
+Route::get('/privacy', [LegalController::class, 'privacy'])->name('legal.privacy');
+Route::get('/terms', [LegalController::class, 'terms'])->name('legal.terms');
+
+Route::middleware(['auth', 'active', 'verified'])->group(function () {
     /*
      * The console page ships no data of its own. Each tile fetches from its own
      * endpoint, so one slow aggregate delays a single tile instead of the page,
@@ -81,6 +91,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('invitations/{invitation}', [CircleManagementController::class, 'revokeInvitation'])->name('invitations.destroy');
 
         Route::delete('members/{user}', [CircleManagementController::class, 'removeMember'])->name('members.remove');
+        // Taking a reported post off this circle's wall. Local to the circle:
+        // deleting it everywhere is staff's call, from the Reports page.
+        Route::delete('posts/{post}', [CircleManagementController::class, 'removePost'])->name('posts.remove');
         // Who else runs the place. The owner's to decide, unlike handing the
         // circle over — that one is staff's, below.
         Route::patch('members/{user}/role', [CircleManagementController::class, 'setMemberRole'])->name('members.role');
@@ -128,6 +141,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('users', [UserController::class, 'index'])->name('users');
         Route::post('users/{user}/reset-link', PasswordResetLinkController::class)->name('users.reset-link');
+        Route::post('users/{user}/disable', [AccountStatusController::class, 'disable'])->name('users.disable');
+        Route::post('users/{user}/enable', [AccountStatusController::class, 'enable'])->name('users.enable');
+
+        /*
+         * The moderation queue. Each decision closes every open report about
+         * the same thing, so one tap answers a pile-on.
+         */
+        Route::get('reports', [AdminReportController::class, 'index'])->name('reports');
+        Route::post('reports/{report}/remove', [AdminReportController::class, 'remove'])->name('reports.remove');
+        Route::post('reports/{report}/disable', [AdminReportController::class, 'disable'])->name('reports.disable');
+        Route::post('reports/{report}/dismiss', [AdminReportController::class, 'dismiss'])->name('reports.dismiss');
     });
 });
 

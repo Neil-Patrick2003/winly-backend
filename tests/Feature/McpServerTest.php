@@ -145,3 +145,27 @@ test('an AI integration token cannot open the mobile API', function () {
 
     $this->getJson(route('api.v1.user'), ['Authorization' => "Bearer {$appToken}"])->assertOk();
 });
+
+test('a co-owner sees the circles they were given the run of', function () {
+    $coOwner = User::factory()->create();
+    $shared = Circle::factory()->create(['name' => 'Shared Crew']);
+
+    CircleMembership::factory()->create([
+        'circle_id' => $shared->id,
+        'user_id' => $coOwner->id,
+        'role' => CircleMembership::ROLE_OWNER,
+        'joined_at' => now()->subMonth(),
+    ]);
+
+    ($this->join)($shared, 'Ben Quiet');
+
+    WelleServer::actingAs($coOwner)
+        ->tool(ListMyCirclesTool::class)
+        ->assertOk()
+        ->assertSee('Shared Crew');
+
+    WelleServer::actingAs($coOwner)
+        ->tool(MembersWithoutPostsTool::class, ['circle_id' => $shared->id])
+        ->assertOk()
+        ->assertSee(['Shared Crew', 'Ben Quiet']);
+});

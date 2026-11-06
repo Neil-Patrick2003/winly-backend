@@ -39,6 +39,7 @@ class StoryController extends Controller
 
         $stories = Story::query()
             ->active()
+            ->whereNotIn('user_id', $viewer->hiddenUserIds())
             ->where(function (Builder $query) use ($viewer): void {
                 $query
                     ->whereIn('user_id', $viewer->following()->select('users.id'))

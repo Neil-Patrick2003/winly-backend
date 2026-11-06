@@ -61,6 +61,7 @@ class FollowController extends Controller
         $people = User::query()
             ->join('follows', "follows.{$personSide}", '=', 'users.id')
             ->where("follows.{$subjectSide}", $user->getKey())
+            ->whereNotIn('users.id', $viewer->hiddenUserIds())
             ->select('users.*')
             // Aliased onto the model so the cursor can read the columns it
             // orders by. The follow id breaks ties on the timestamp.
@@ -90,6 +91,10 @@ class FollowController extends Controller
         $follower = $request->user();
 
         $this->refuseSelfFollow($follower, $user);
+
+        // Not found rather than forbidden: somebody who blocked you should not
+        // be discoverable by the shape of the error either.
+        abort_if($follower->hasBlockWith($user), 404);
 
         $created = DB::transaction(function () use ($follower, $user): bool {
             $follow = Follow::firstOrCreate([
